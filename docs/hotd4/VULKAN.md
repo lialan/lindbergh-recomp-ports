@@ -126,6 +126,40 @@ require enabled device support; asset conversion for GPUs without that support
 remains pending.
 
 These components execute directly on Vulkan without host GL calls. The game
-still uses its existing renderer until shader-pack runtime lookup, complete
-state/texture/GLX semantics and guest HLE wiring are integrated. OpenXR Vulkan
+still uses its existing renderer until complete state/texture/GLX semantics and
+guest HLE wiring are integrated. OpenXR Vulkan
 and runtime foveation negotiation remain pending.
+
+## Shader archives and runtime uniform state
+
+`lindberghrecomp/tools/vulkan/pack_shaders.py` packages validated modules and
+reflection into a versioned `.lvsp` archive. It verifies module hashes before
+packaging and writes the result atomically. `ShaderPack` loads this format using
+only the C++ standard library. Program selection uses SHA-256 source identities
+and captured active attribute bindings; there is no runtime GLSL compiler or
+silent fallback for an unknown variant. The normal Vulkan driver still builds
+native pipelines during explicit preparation; its device-specific cache is
+persisted separately.
+
+The 310 unique captured programs produce a 7,424,808-byte archive. The native
+ARM64 test loads all pairs, selects them by source/bindings, reads 38,392 uniform
+fields and creates all shader modules under Vulkan validation. This checks
+archive loading, not gameplay with those shaders. The source-owned rendering
+fixture now loads its modules and reflected guest uniforms through the archive.
+Uniform writes preserve std140 vector/matrix/array padding and transpose
+semantics, and unchanged values do not advance the data version.
+
+Guest shader-source normalization and link-time compatibility repairs still
+need to be connected to these captured source identities. The standalone pack
+lookup is not yet the game's `glLinkProgram` implementation.
+
+After compiling a local capture, package and inspect it with:
+
+```sh
+python3 lindberghrecomp/tools/vulkan/pack_shaders.py build-vulkan-shaders \
+  build-vulkan-shaders/hotd4.lvsp
+VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
+  ./build-vulkan-core/lindbergh_vulkan_selftest build-vulkan-shaders/hotd4.lvsp
+```
+
+The ordinary CTest test uses only source-owned fixtures and needs no game data.
