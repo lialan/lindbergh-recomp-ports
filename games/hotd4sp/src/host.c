@@ -23,8 +23,12 @@
  * eax = &x, edx = &y. Outside the window the gun is off the screen. */
 static void h_gun_pos(CPU *c)
 {
+    /* the stack: raw x, raw y, adjust, player - player 2's gun (dual
+     * wielding) answers from the second pointer, not the first */
+    uint32_t player = rd32(c->esp + 20);
     int mx, my, w, h;
-    host_mouse_state(&mx, &my, NULL);
+    if (player == 1) { if (!host_gun2_state(&mx, &my)) mx = my = -100000; }
+    else host_mouse_state(&mx, &my, NULL);
     lindbergh_window_size(&w, &h);
     int on = mx >= 0 && my >= 0 && mx < w && my < h;
     long x = ((long)mx * 255 + (w - 1) / 2) / (w > 1 ? w - 1 : 1),
