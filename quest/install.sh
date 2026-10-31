@@ -12,6 +12,7 @@ ROOT=$(dirname "$Q")
 ID=$1
 [ -n "$ID" ] && [ -f "$ROOT/games/$ID/game.conf" ] || { echo "usage: $0 <game> [game folder]; games: $(ls "$ROOT/games")"; exit 1; }
 . "$ROOT/games/$ID/game.conf"
+[ -f "$Q/$ID/build.gradle" ] || { echo "$TITLE has no Quest port yet" >&2; exit 1; }
 adb install -r "$Q/$APK.apk"
 # the game is read from shared storage
 adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE allow

@@ -86,7 +86,7 @@ if [ -n "${SOLIBS:-}" ]; then
     say "lifting the libraries it loads"
     # The order (game.conf) fixes where each library lands in guest memory.
     libs=(); for f in $SOLIBS; do libs+=("$GAME/$f"); done
-    ( cd "$TOOLKIT" && "$VPY" -m tools.recomp.solib "$STAGE" "${libs[@]}" )
+    ( cd "$TOOLKIT" && "$VPY" -m tools.recomp.solib "$STAGE" --main-elf "$GAME/$ELF" "${libs[@]}" )
 fi
 say "generating GL thunks"
 "$VPY" "$TOOLKIT/tools/gen_gl_thunks.py" "$STAGE/recomp_imports.h" "$GLH/gl.h" "$GLH/glext.h" > "$STAGE/recomp_gl_thunks.c"
@@ -105,7 +105,7 @@ done
 say "building"
 cmake -S "$ROOT" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
       ${PREFIX:+-DCMAKE_PREFIX_PATH="$PREFIX"} >/dev/null
-cmake --build "$BUILD"
+cmake --build "$BUILD" --target "$ID"
 
 [ -x "$BUILD/$ID" ] || die "build finished without $BUILD/$ID"
 say "built $BUILD/$ID"

@@ -21,6 +21,7 @@ ID=$1
 shift
 . "$ROOT/games/$ID/game.conf"
 M=$Q/$ID                                # the game's Android module
+[ -f "$M/build.gradle" ] || { echo "$TITLE has no Quest port yet" >&2; exit 1; }
 SDK=${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}
 NDK=${ANDROID_NDK:-$SDK/ndk/27.3.13750724}
 DEPS=${DEPS:-$ROOT/../deps}

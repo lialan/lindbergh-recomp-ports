@@ -17,6 +17,13 @@ jobs:
         with:
           submodules: recursive
       - run: brew install ninja sdl2
+      - name: Lifter regressions
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install capstone pyelftools
+          .venv/bin/python lindberghrecomp/tools/recomp/test_driver.py
+          .venv/bin/python lindberghrecomp/pcrecomp/tools/lift/test_movmskps.py
+          .venv/bin/python lindberghrecomp/pcrecomp/tools/lift/test_sse2_lanes.py
       - run: cmake -S . -B build-mac -G Ninja
       - run: cmake --build build-mac
       - run: build-mac/lindberghrecomp/lindbergh_rt_selftest
