@@ -9,8 +9,7 @@ jobs:
   macos:
     # CI has no game, so this configures without lifted code. The CMake then
     # builds the toolkit's self-check through the POSIX/SDL2 host against this
-    # repo's pinned submodule, which proves the pin builds. (The Windows build
-    # is upstream's and not maintained here: docs/ghostsquadevolution/WINDOWS.md.)
+    # repo's pinned submodule, which proves the pin builds.
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -27,3 +26,33 @@ jobs:
       - run: cmake -S . -B build-mac -G Ninja
       - run: cmake --build build-mac
       - run: build-mac/lindberghrecomp/lindbergh_rt_selftest
+
+  windows-openxr:
+    # No game or headset required. Compiles the Windows OpenXR host and runs
+    # the guest-memory, linked-library, container and audio ABI contracts.
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-SDL2
+            mingw-w64-x86_64-glew
+            mingw-w64-x86_64-openal
+            mingw-w64-x86_64-openxr-sdk
+            mingw-w64-x86_64-zlib
+      - run: python lindberghrecomp/tests/test_gl_thunks.py
+      - run: cmake -S . -B build-win64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DLINDBERGH_GAMES=none -DLINDBERGH_OPENXR=ON
+      - run: cmake --build build-win64 --parallel 4
+      - run: ctest --test-dir build-win64/lindberghrecomp --output-on-failure

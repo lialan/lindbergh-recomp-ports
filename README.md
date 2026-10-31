@@ -43,6 +43,10 @@ home of sp00nznet's recomp projects.
 | [The House of the Dead 4 Special](docs/hotd4sp/QUEST.md) (2006) | plays, 60 fps, 16:9 | plays, released |
 | [The House of the Dead EX](docs/hotdex/MACOS.md) | experimental, 16:9 | — |
 
+An experimental [HOTD4 Windows PC VR build](docs/hotd4/WINDOWS-PCVR.md) uses the
+shared runtime through OpenXR. It cross-compiles; Windows headset validation
+is still pending.
+
 On the Mac all five run in 16:9. **Ghost Squad Evolution** draws its 3D wider
 than the cabinet's 4:3 and moves its HUD to the screen's edges; menus stay
 4:3 (`LINDBERGH_WIDE=0` brings back the arcade picture). **The House of the
