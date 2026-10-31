@@ -17,8 +17,9 @@
 #include <string.h>
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+static unsigned capture_serial;
 
-static int shader_source(const char *dir, GLuint shader, const char *stage)
+static int shader_source(const char *dir, GLuint shader, const char *filename)
 {
     GLint size = 0;
     glGetShaderiv(shader, GL_SHADER_SOURCE_LENGTH, &size);
@@ -28,7 +29,7 @@ static int shader_source(const char *dir, GLuint shader, const char *stage)
     GLsizei length = 0;
     glGetShaderSource(shader, size, &length, source);
     char path[4096];
-    snprintf(path, sizeof path, "%s/%s_%u.glsl", dir, stage, shader);
+    snprintf(path, sizeof path, "%s/%s", dir, filename);
     FILE *out = fopen(path, "wb");
     int ok = out && fwrite(source, 1, (size_t)length, out) == (size_t)length;
     if (out) fclose(out);
@@ -55,12 +56,18 @@ static void capture_link(GLuint program)
     }
     if (!vertex || !fragment) return;
     pthread_mutex_lock(&lock);
-    if (!shader_source(dir, vertex, "vs") || !shader_source(dir, fragment, "fs")) goto done;
+    /* A shader object can be edited and relinked into several programs. Each
+     * successful link needs its own immutable source snapshot. */
+    const unsigned serial = ++capture_serial;
+    char vs_file[96], fs_file[96];
+    snprintf(vs_file, sizeof vs_file, "vs_p%u_s%u_l%u.glsl", program, vertex, serial);
+    snprintf(fs_file, sizeof fs_file, "fs_p%u_s%u_l%u.glsl", program, fragment, serial);
+    if (!shader_source(dir, vertex, vs_file) || !shader_source(dir, fragment, fs_file)) goto done;
     char path[4096];
     snprintf(path, sizeof path, "%s/programs.jsonl", dir);
     FILE *out = fopen(path, "a");
     if (!out) goto done;
-    fprintf(out, "{\"program\":%u,\"vertex\":\"vs_%u.glsl\",\"fragment\":\"fs_%u.glsl\",\"attributes\":[", program, vertex, fragment);
+    fprintf(out, "{\"program\":%u,\"vertex\":\"%s\",\"fragment\":\"%s\",\"attributes\":[", program, vs_file, fs_file);
     GLint attributes = 0;
     glGetProgramiv(program, GL_ACTIVE_ATTRIBUTES, &attributes);
     for (GLint i = 0; i < attributes; i++) {

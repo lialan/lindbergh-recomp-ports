@@ -93,6 +93,8 @@ explicitly permits software Vulkan; the normal device selector does not.
 
 The build tool `lindberghrecomp/tools/vulkan/compile_shaders.py` consumes exact
 linked vertex/fragment pairs and attribute bindings from a development capture.
+Each successful link gets immutable source snapshots, including when a shared
+shader object is edited before a later link.
 `tools/vulkan/capture-gl-macos.c` provides that capture for the existing macOS
 reference renderer; it is never linked into the Vulkan runtime. Captures and
 compiled game shaders remain local build artifacts.
@@ -107,6 +109,23 @@ A source-owned GLSL 1.20 fixture is converted by the same tool during the build;
 its front-face color and stereo output are checked with actual Vulkan readback.
 
 Guest matrix stacks and immediate-mode primitive assembly now produce indexed
-Vulkan geometry with reused CPU storage. Client arrays, textures, shader-pack
-runtime lookup, and guest HLE wiring remain pending. No host GL calls are used
-by these components.
+Vulkan geometry with reused CPU storage. Guest vertex-array planning now
+captures VBO bindings at pointer-definition time, binds static geometry without
+another CPU upload, and uploads client arrays in their original native formats.
+Disabled arrays use current attribute values. Tests cover nonzero vertex
+offsets, normalized byte colors and guest memory at the 32-bit address limit.
+Unsupported fetch formats and out-of-bounds ranges fail explicitly.
+
+Uniform descriptors are allocated/written once per buffered frame slot; shader
+state changes use aligned dynamic offsets into persistent storage. A converted
+GLSL fixture passes pixel checks across 12 asynchronous submissions. Textured
+stereo checks also pass for GPU-resident vertex/index buffers, 16-bit indices,
+texture orientation, mip selection and immutable material descriptors. Texture
+uploads transition individual mip/layer subresources explicitly. BC textures
+require enabled device support; asset conversion for GPUs without that support
+remains pending.
+
+These components execute directly on Vulkan without host GL calls. The game
+still uses its existing renderer until shader-pack runtime lookup, complete
+state/texture/GLX semantics and guest HLE wiring are integrated. OpenXR Vulkan
+and runtime foveation negotiation remain pending.
