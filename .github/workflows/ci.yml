@@ -11,7 +11,7 @@ jobs:
     # builds the toolkit's self-check through the POSIX/SDL2 host against this
     # repo's pinned submodule, which proves the pin builds. (The Windows build
     # is upstream's and not maintained here: docs/ghostsquadevolution/WINDOWS.md.)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
