@@ -11,6 +11,28 @@ Sega Lindbergh arcade games in VR, for Meta Quest 3, Quest 3S and Quest Pro:
 code recompiled to run natively on the headset, the VR host, and its
 libraries. You need your own copy of the arcade game.
 
+## New in v0.2.7
+
+- **Smoother frame rate.** In The House of the Dead 4, gameplay now runs at a
+  steady 60 fps on the Quest 3. What changed: GL state calls that would
+  change nothing are skipped instead of sent to the GPU; the queue that
+  carries GL calls to the graphics thread is lighter; the games' SIMD (SSE)
+  code is now compiled to real ARM vector code; Let's Go Jungle! no longer
+  stalls waiting on the graphics thread; and some framebuffer copies stay on
+  the GPU instead of being read back to the CPU. All four games are
+  re-translated with the new lifter.
+- **Show FPS:** a new option in the headset's settings panel that shows the
+  frame rate.
+- **Fixes:**
+  - The House of the Dead 4 Special could freeze at the start (two threads
+    got the same thread id).
+  - Dual wielding: player 2's shots, reload and hit splash now follow player
+    2's own gun in The House of the Dead 4 and The House of the Dead 4
+    Special, and player 2 joins with their first shot.
+- Let's Go Jungle! is still experimental (a bit buggy).
+- Installing over v0.2.6 keeps your settings (same signing keys). As before,
+  bring your own game files: the APKs contain no game data.
+
 ## New in v0.2.6
 
 - **Dual wielding** in all four games: turn on *Dual wield* in the settings
