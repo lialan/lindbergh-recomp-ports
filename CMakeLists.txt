@@ -41,11 +41,13 @@ function(lindbergh_game id)
     else()
         add_executable(${id} "${src}/host.c" ${lifted})
     endif()
-    if(NOT WIN32)
+    if(NOT WIN32 OR CMAKE_SIZEOF_VOID_P EQUAL 8)
         # Typed GL thunks for a 64-bit host, generated from the host's GL
         # headers (lindberghrecomp/tools/gen_gl_thunks.py): on the Quest from
         # gl4es' when the game has its own set for them
-        if(ANDROID AND EXISTS "${gen}/recomp_gl_thunks_android.c")
+        if(WIN32)
+            target_sources(${id} PRIVATE "${gen}/recomp_gl_thunks_windows.c")
+        elseif(ANDROID AND EXISTS "${gen}/recomp_gl_thunks_android.c")
             target_sources(${id} PRIVATE "${gen}/recomp_gl_thunks_android.c")
         else()
             target_sources(${id} PRIVATE "${gen}/recomp_gl_thunks.c")

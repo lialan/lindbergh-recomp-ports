@@ -91,7 +91,7 @@ static void h_sprite_res(CPU *c)
     c->eax = 5;                 /* 16:9 */
 }
 
-#ifdef __ANDROID__
+#ifdef LINDBERGH_OPENXR
 /* In the headset the view is far wider than the cabinet's monitor, and the
  * head turns: the NN library's clip test (nnSetClipPlane builds its four
  * side planes from the projection's focal lengths) dropped scenery and
@@ -196,7 +196,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "[hotd4] aim: the gun is where the pointer is\n");
     if (guest_override("_Z16GetAdjstGunAccelPfS_ttP23GunAccelAdjustValueType", h_gun_accel))
         fprintf(stderr, "[hotd4] reload: the reload input shakes the gun\n");
-#ifdef __ANDROID__
+#ifdef LINDBERGH_OPENXR
     widen_culling();
 #endif
 
