@@ -79,7 +79,7 @@ VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
 ```
 
 It requires a C++17 compiler, Vulkan headers/loader, Python 3 and
-`glslangValidator`. Shader compilation happens at build time. The self-test
+`glslangValidator`, SPIRV-Tools and `spirv-cross`. Shader compilation happens at build time. The self-test
 explicitly permits software Vulkan; the normal device selector does not.
 
 ## References
@@ -88,3 +88,25 @@ explicitly permits software Vulkan; the normal device selector does not.
 - [Valve's Vulkan foveation integration](https://github.com/ValveSoftware/Unity/blob/main/com.valvesoftware.openxr.utils/Runtime/Features/ValveOpenXRFoveatedRenderingFeature.cs)
 - [Khronos fragment density maps](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_fragment_density_map.html)
 - [OpenXR Vulkan foveation images](https://registry.khronos.org/OpenXR/specs/1.1/man/html/XR_FB_foveation_vulkan.html)
+
+## Offline shader conversion
+
+The build tool `lindberghrecomp/tools/vulkan/compile_shaders.py` consumes exact
+linked vertex/fragment pairs and attribute bindings from a development capture.
+`tools/vulkan/capture-gl-macos.c` provides that capture for the existing macOS
+reference renderer; it is never linked into the Vulkan runtime. Captures and
+compiled game shaders remain local build artifacts.
+
+The bounded HOTD4 boot/intro reference produced 323 successful program links
+(310 unique source/binding pairs). All compile to Vulkan 1.1 SPIR-V, pass
+`spirv-val`, and agree on reflected uniform-block layouts across stages.
+This is sampled shader coverage, not full gameplay coverage. The converter
+moves legacy matrices/material/light/fog state into uniform buffers, preserves
+explicit vertex bindings, and adds multiview reprojection and clip conversion.
+A source-owned GLSL 1.20 fixture is converted by the same tool during the build;
+its front-face color and stereo output are checked with actual Vulkan readback.
+
+Guest matrix stacks and immediate-mode primitive assembly now produce indexed
+Vulkan geometry with reused CPU storage. Client arrays, textures, shader-pack
+runtime lookup, and guest HLE wiring remain pending. No host GL calls are used
+by these components.
