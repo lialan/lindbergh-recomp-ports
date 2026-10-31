@@ -4,40 +4,23 @@
 #include "game_profile.h"
 #include "lindbergh_rt.h"
 
-/* EX exposes a cdecl entry followed by a register-argument body (the symbol
- * ending in '.'). Internal calls use the body directly. Both receive the
- * original argument slots, with player in slot 5 and calibration in slot 4. */
-static uint32_t gun_adjust[2];
-static void gun_pos(CPU *c, uint32_t px, uint32_t py)
+/* Normal gameplay reads the pointer through CInputJvs::GetPosition,
+ * not the operator menu's GetAdjstGunPos helper. The original returns
+ * floats in the cabinet's 1360x768 coordinate system. Replace calibration
+ * and four-frame smoothing here, leaving trigger/pedal edges in the game. */
+static void h_gun_position(CPU *c)
 {
-    unsigned player = A32(5);
-    if (player < 2) gun_adjust[player] = A32(4);
+    unsigned player = A32(1) & 0xff;
+    if (player >= 2 || !A32(2)) return;
     int x, y, w, h;
     if (player == 1) { if (!host_gun2_state(&x, &y)) x = y = -100000; }
     else host_mouse_state(&x, &y, NULL);
+    if (host_cabinet_buttons() & (player ? CAB_P2_RELOAD : CAB_P1_RELOAD)) x = y = -100000;
     lindbergh_window_size(&w, &h);
-    int on = x >= 0 && y >= 0 && x < w && y < h;
-    long gx = ((long)x * 255 + (w - 1) / 2) / (w > 1 ? w - 1 : 1);
-    long gy = ((long)y * 255 + (h - 1) / 2) / (h > 1 ? h - 1 : 1);
-    wr8(px, (uint8_t)(gx < 0 ? 0 : gx > 255 ? 255 : gx));
-    wr8(py, (uint8_t)(gy < 0 ? 0 : gy > 255 ? 255 : gy));
-    RET(on);
+    float position[2] = { x * (1360.0f / (w > 0 ? w : 1360)),
+                          y * (768.0f / (h > 0 ? h : 768)) };
+    memcpy(APTR(2), position, sizeof position);
 }
-static void h_gun_pos(CPU *c) { gun_pos(c, A32(0), A32(1)); }
-static void h_gun_pos_reg(CPU *c) { gun_pos(c, c->eax, c->edx); }
-
-static void gun_accel(CPU *c, uint32_t px, uint32_t py)
-{
-    unsigned player = gun_adjust[1] && A32(4) == gun_adjust[1] + 12;
-    static unsigned left[2];
-    if (host_cabinet_buttons() & (player ? CAB_P2_RELOAD : CAB_P1_RELOAD)) left[player] = 15;
-    float v = left[player] ? 1.0f : 0.0f;
-    if (left[player]) left[player]--;
-    uint32_t bits; memcpy(&bits, &v, 4);
-    wr32(px, bits); wr32(py, bits);
-}
-static void h_gun_accel(CPU *c) { gun_accel(c, A32(0), A32(1)); }
-static void h_gun_accel_reg(CPU *c) { gun_accel(c, c->eax, c->edx); }
 
 static const LgGameProfile k_profile = {
     .title = "The House of the Dead EX",
@@ -59,10 +42,10 @@ int main(int argc, char **argv)
     if (guest_load(argv[1], argc - 1, argv + 1) != 0) return 1;
     game_profile_apply(&k_profile);
     hle_register_all();
-    guest_override("_Z14GetAdjstGunPosPhS_ttP18GunAdjustValueTypei", h_gun_pos);
-    guest_override("_Z14GetAdjstGunPosPhS_ttP18GunAdjustValueTypei.", h_gun_pos_reg);
-    guest_override("_Z16GetAdjstGunAccelPfS_ttP23GunAccelAdjustValueType", h_gun_accel);
-    guest_override("_Z16GetAdjstGunAccelPfS_ttP23GunAccelAdjustValueType.", h_gun_accel_reg);
+    if (!guest_override("_ZN9CInputJvs11GetPositionEaP12KfVectorNNGL", h_gun_position)) {
+        fprintf(stderr, "[hotdex] missing gun input entry point; unsupported executable\n");
+        return 1;
+    }
     CPU cpu;
     guest_init_cpu(&cpu);
     dispatch(&cpu, guest_entry());
