@@ -37,7 +37,8 @@ if [ ! -f gl4es/lib/libGL.a ]; then
     # the fixes the games need (multiview, texture targets, shader conversion): docs/QUEST.md
     git -C gl4es apply --check "$ROOT/quest/gl4es.patch" 2>/dev/null && git -C gl4es apply "$ROOT/quest/gl4es.patch"
     cmake -S gl4es -B gl4es-android -G Ninja $TC -DANDROID=ON -DNOX11=ON -DNOEGL=ON -DSTATICLIB=ON \
-        -DNO_INIT_CONSTRUCTOR=ON -DUSE_ANDROID_LOG=ON -DDEFAULT_ES=2 >/dev/null
+        -DNO_INIT_CONSTRUCTOR=ON -DUSE_ANDROID_LOG=ON -DDEFAULT_ES=2 \
+        -DCMAKE_C_FLAGS_RELEASE="-O3 -DNDEBUG -fno-stack-protector -U_FORTIFY_SOURCE" >/dev/null   # as the runtime's release build
     cmake --build gl4es-android -j"$JOBS"
 fi
 
