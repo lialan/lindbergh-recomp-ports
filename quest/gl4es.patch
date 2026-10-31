@@ -1917,10 +1917,169 @@ index 96e0720..32f2415 100644
  
  //Direct wrapper
 diff --git a/src/gl/texture_read.c b/src/gl/texture_read.c
-index 2d70cd9..cca0f63 100644
+index 2d70cd9..e1433ae 100644
 --- a/src/gl/texture_read.c
 +++ b/src/gl/texture_read.c
-@@ -149,8 +149,37 @@ void APIENTRY_GL4ES gl4es_glCopyTexSubImage2D(GLenum target, GLint level, GLint
+@@ -98,6 +98,143 @@ void APIENTRY_GL4ES gl4es_glCopyTexImage2D(GLenum target,  GLint level,  GLenum
+     glstate->vao->unpack = unpack;
+ }
+ 
++/* lindbergh: a copy into a GL_DEPTH_COMPONENT texture, on the GPU. GLES reads
++ * no depth, so the generic path below reads the framebuffer's colour back and
++ * stores each pixel's red channel as its depth (get_color_map: depth is
++ * channel 0) - every frame in The House of the Dead 4, which depends on what
++ * that gives. Here the same, without the read back: the colour region copied
++ * into a texture of its own, then drawn into the depth texture by a shader
++ * writing gl_FragDepth = red. r/255 into a 16-bit depth is r*257, what the
++ * conversion stores. Every piece of GL state the draw touches is put back.
++ * 1: done; 0: not possible here (the caller goes the old way, for good). */
++static int depth_from_red(gltexture_t *bound, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height)
++{
++    static int broken = -1;            /* -1 not tried, 0 works, 1 failed */
++    static GLuint prog, ctex, dfb; static GLint loc_scale;
++    static GLsizei cw, ch;
++    if (broken == 1) return 0;
++    if (broken < 0) { const char *v = getenv("LINDBERGH_DEPTH_COPY_CPU"); if (v && *v == '1') { broken = 1; return 0; } }
++    LOAD_GLES(glGetError); LOAD_GLES(glGetIntegerv); LOAD_GLES(glGetBooleanv); LOAD_GLES(glIsEnabled);
++    LOAD_GLES(glEnable); LOAD_GLES(glDisable); LOAD_GLES(glBindTexture); LOAD_GLES(glActiveTexture);
++    LOAD_GLES(glTexImage2D); LOAD_GLES(glTexParameteri); LOAD_GLES(glCopyTexSubImage2D); LOAD_GLES(glGenTextures);
++    LOAD_GLES(glViewport); LOAD_GLES(glDepthFunc); LOAD_GLES(glDepthMask); LOAD_GLES(glColorMask);
++    LOAD_GLES(glDrawArrays);
++    LOAD_GLES2(glCreateShader); LOAD_GLES2(glShaderSource); LOAD_GLES2(glCompileShader); LOAD_GLES2(glGetShaderiv);
++    LOAD_GLES2(glCreateProgram); LOAD_GLES2(glAttachShader); LOAD_GLES2(glLinkProgram); LOAD_GLES2(glGetProgramiv);
++    LOAD_GLES2(glUseProgram); LOAD_GLES2(glGetUniformLocation); LOAD_GLES2(glUniform4f); LOAD_GLES2(glUniform1i);
++    LOAD_GLES2_OR_OES(glGenFramebuffers); LOAD_GLES2_OR_OES(glBindFramebuffer); LOAD_GLES2_OR_OES(glFramebufferTexture2D);
++    LOAD_GLES2_OR_OES(glCheckFramebufferStatus);
++    while (gles_glGetError() != GL_NO_ERROR) ;
++    if (!prog) {
++        static const char *vs = "#version 300 es\n"
++            "uniform vec4 u_rect;\n"      /* destination in NDC: x0 y0 x1 y1 */
++            "out vec2 v_uv;\n"
++            "void main() {\n"
++            "  vec2 c = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1));\n"
++            "  v_uv = c;\n"
++            "  gl_Position = vec4(mix(u_rect.xy, u_rect.zw, c), 0.0, 1.0);\n"
++            "}\n";
++        static const char *fs = "#version 300 es\n"
++            "precision highp float;\n"
++            "uniform sampler2D u_col;\n"
++            "in vec2 v_uv;\n"
++            "uniform vec4 u_src;\n"       /* the copied colour's part of its texture */
++            "void main() { gl_FragDepth = texture(u_col, v_uv * u_src.zw).r; }\n";
++        GLuint sh[2]; const char *src[2] = { vs, fs }; GLenum kind[2] = { GL_VERTEX_SHADER, GL_FRAGMENT_SHADER };
++        prog = gles_glCreateProgram();
++        for (int i = 0; i < 2; i++) {
++            GLint ok = 0;
++            sh[i] = gles_glCreateShader(kind[i]);
++            gles_glShaderSource(sh[i], 1, &src[i], NULL);
++            gles_glCompileShader(sh[i]);
++            gles_glGetShaderiv(sh[i], GL_COMPILE_STATUS, &ok);
++            if (!ok) { broken = 1; fprintf(stderr, "[gl4es] depth from red: shader %d does not compile; read back on the CPU\n", i); return 0; }
++            gles_glAttachShader(prog, sh[i]);
++        }
++        GLint ok = 0;
++        gles_glLinkProgram(prog);
++        gles_glGetProgramiv(prog, GL_LINK_STATUS, &ok);
++        if (!ok) { broken = 1; fprintf(stderr, "[gl4es] depth from red: program does not link; read back on the CPU\n"); return 0; }
++        loc_scale = gles_glGetUniformLocation(prog, "u_rect");
++        gles_glGenFramebuffers(1, &dfb);
++        gles_glGenTextures(1, &ctex);
++    }
++    /* what is put back after */
++    GLint s_prog, s_unit, s_tex, s_vp[4], s_fb, s_dfunc;
++    GLboolean s_dmask, s_cmask[4];
++    gles_glGetIntegerv(GL_CURRENT_PROGRAM, &s_prog);
++    gles_glGetIntegerv(GL_ACTIVE_TEXTURE, &s_unit);
++    gles_glGetIntegerv(GL_VIEWPORT, s_vp);
++    gles_glGetIntegerv(0x8CA6 /* GL_FRAMEBUFFER_BINDING */, &s_fb);
++    gles_glGetIntegerv(GL_DEPTH_FUNC, &s_dfunc);
++    gles_glGetBooleanv(GL_DEPTH_WRITEMASK, &s_dmask);
++    gles_glGetBooleanv(GL_COLOR_WRITEMASK, s_cmask);
++    static const GLenum caps[] = { GL_DEPTH_TEST, GL_SCISSOR_TEST, GL_BLEND, GL_CULL_FACE, GL_STENCIL_TEST,
++                                   GL_POLYGON_OFFSET_FILL, 0x8C89 /* GL_RASTERIZER_DISCARD */, GL_DITHER,
++                                   GL_SAMPLE_ALPHA_TO_COVERAGE, GL_SAMPLE_COVERAGE };
++    GLboolean s_cap[sizeof caps / sizeof caps[0]];
++    for (unsigned i = 0; i < sizeof caps / sizeof caps[0]; i++) s_cap[i] = gles_glIsEnabled(caps[i]);
++    gles_glActiveTexture(GL_TEXTURE0);
++    gles_glGetIntegerv(GL_TEXTURE_BINDING_2D, &s_tex);
++
++    /* 1: the colour, from the framebuffer being read, into ctex */
++    gles_glBindTexture(GL_TEXTURE_2D, ctex);
++    if (cw < width || ch < height) {
++        cw = width > cw ? width : cw; ch = height > ch ? height : ch;
++        gles_glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, cw, ch, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
++        gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
++        gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++        gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++        gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    }
++    gles_glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, x, y, width, height);
++    GLenum err = gles_glGetError();
++
++    /* 2: drawn into the depth texture: red as depth */
++    GLsizei tw = bound->nwidth ? bound->nwidth : bound->width, th = bound->nheight ? bound->nheight : bound->height;
++    if (err == GL_NO_ERROR) {
++        gles_glBindFramebuffer(GL_FRAMEBUFFER, dfb);
++        gles_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, bound->glname, 0);
++        if (gles_glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) err = GL_INVALID_FRAMEBUFFER_OPERATION;
++    }
++    if (err == GL_NO_ERROR) {
++        for (unsigned i = 0; i < sizeof caps / sizeof caps[0]; i++) gles_glDisable(caps[i]);
++        gles_glEnable(GL_DEPTH_TEST);           /* depth is only written with the test on */
++        gles_glDepthFunc(GL_ALWAYS);
++        gles_glDepthMask(GL_TRUE);
++        gles_glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
++        gles_glViewport(0, 0, tw, th);
++        gles_glUseProgram(prog);
++        gles_glUniform1i(gles_glGetUniformLocation(prog, "u_col"), 0);
++        gles_glUniform4f(loc_scale, 2.0f * xoffset / tw - 1.0f, 2.0f * yoffset / th - 1.0f,
++                         2.0f * (xoffset + width) / tw - 1.0f, 2.0f * (yoffset + height) / th - 1.0f);
++        gles_glUniform4f(gles_glGetUniformLocation(prog, "u_src"), 0, 0, (float)width / cw, (float)height / ch);
++        gles_glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
++        err = gles_glGetError();
++    }
++
++    /* put back */
++    gles_glBindFramebuffer(GL_FRAMEBUFFER, dfb);
++    gles_glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, 0, 0);
++    gles_glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)s_fb);
++    gles_glUseProgram((GLuint)s_prog);
++    gles_glBindTexture(GL_TEXTURE_2D, (GLuint)s_tex);
++    gles_glActiveTexture((GLenum)s_unit);
++    gles_glViewport(s_vp[0], s_vp[1], s_vp[2], s_vp[3]);
++    gles_glDepthFunc((GLenum)s_dfunc);
++    gles_glDepthMask(s_dmask);
++    gles_glColorMask(s_cmask[0], s_cmask[1], s_cmask[2], s_cmask[3]);
++    for (unsigned i = 0; i < sizeof caps / sizeof caps[0]; i++) (s_cap[i] ? gles_glEnable : gles_glDisable)(caps[i]);
++    while (gles_glGetError() != GL_NO_ERROR) ;
++    if (err != GL_NO_ERROR) {
++        broken = 1;
++        fprintf(stderr, "[gl4es] depth from red: GL error %#x; read back on the CPU from now on\n", err);
++        return 0;
++    }
++    if (broken < 0) { broken = 0; fprintf(stderr, "[gl4es] depth copies: on the GPU (red as depth)\n"); }
++    return 1;
++}
++
+ void APIENTRY_GL4ES gl4es_glCopyTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset,
+                                 GLint x, GLint y, GLsizei width, GLsizei height) {
+     const GLuint itarget = what_target(target);
+@@ -142,6 +279,14 @@ void APIENTRY_GL4ES gl4es_glCopyTexSubImage2D(GLenum target, GLint level, GLint
+ #endif
+     {
+         int copytex = 0;
++        if (bound->format == GL_DEPTH_COMPONENT && bound->type == GL_UNSIGNED_SHORT && level == 0 && target == GL_TEXTURE_2D &&
++            glstate->colormask[0] && glstate->colormask[1] && glstate->colormask[2] && glstate->colormask[3] &&
++            depth_from_red(bound, xoffset, yoffset, x, y, width, height)) {
++            readfboEnd();
++            glstate->vao->pack = pack;
++            glstate->vao->unpack = unpack;
++            return;
++        }
+         if(glstate->fbo.current_fb->read_type==0) {
+             LOAD_GLES(glGetIntegerv);
+             gles_glGetIntegerv(GL_IMPLEMENTATION_COLOR_READ_FORMAT_OES, (GLint *) &glstate->fbo.current_fb->read_format);
+@@ -149,8 +294,37 @@ void APIENTRY_GL4ES gl4es_glCopyTexSubImage2D(GLenum target, GLint level, GLint
          }
          copytex = ((bound->format==GL_RGBA && bound->type==GL_UNSIGNED_BYTE) 
              || (bound->format==glstate->fbo.current_fb->read_format && bound->type==glstate->fbo.current_fb->read_type));
