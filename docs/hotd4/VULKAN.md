@@ -234,3 +234,15 @@ Android OpenXR runtime; it does not require a Mac-to-Quest streaming runtime.
 
 - [MoltenVK platform implementation](https://github.com/KhronosGroup/MoltenVK)
 - [Official OpenXR SDK and loader](https://github.com/KhronosGroup/OpenXR-SDK)
+
+## Direct backend checkpoint before Zink comparison
+
+Experimental draw packets, resource versions, fixed-function SPIR-V, native
+array draws and GPU color/depth copies now pass a three-frame HOTD4 boot.
+The new bottom-origin pbuffer and retained-depth readback test passes under
+macOS Vulkan validation. This is not full gameplay validation. The first
+captured game run still reports a MoltenVK portability image-view-swizzle
+feature violation and a validation-layer shutdown lifetime error. The image
+capture exists locally, but visual correctness has not yet been established.
+A separate Zink worktree is being used to compare reuse of the existing GL
+renderer; the direct backend work remains isolated here.
