@@ -1916,6 +1916,49 @@ index 96e0720..32f2415 100644
  }
  
  //Direct wrapper
+diff --git a/src/gl/texture_read.c b/src/gl/texture_read.c
+index 2d70cd9..cca0f63 100644
+--- a/src/gl/texture_read.c
++++ b/src/gl/texture_read.c
+@@ -149,8 +149,37 @@ void APIENTRY_GL4ES gl4es_glCopyTexSubImage2D(GLenum target, GLint level, GLint
+         }
+         copytex = ((bound->format==GL_RGBA && bound->type==GL_UNSIGNED_BYTE) 
+             || (bound->format==glstate->fbo.current_fb->read_format && bound->type==glstate->fbo.current_fb->read_type));
++        /* lindbergh: any other texture format, the GPU copy is tried first -
++         * GLES copies into a texture with fewer components (an RGB texture from
++         * an RGBA framebuffer) - and only if the driver refuses it, the read
++         * back and convert on the CPU below. Remembered per format pair: the
++         * fallback was every frame's screen copy in The House of the Dead 4,
++         * a per-pixel conversion on the CPU. */
++        int tried = 0;
++        /* colour into colour only: a luminance, alpha or depth texture gets
++         * gl4es's own conversion of the colour, which a game can depend on
++         * (The House of the Dead 4's depth texture does) */
++        if (!copytex && (bound->format == GL_RGB || bound->format == GL_RGBA)) {
++            static struct { GLenum fmt, type, rfmt, rtype; signed char ok; } seen[16];
++            static int nseen;
++            GLenum rf = glstate->fbo.current_fb->read_format, rt = glstate->fbo.current_fb->read_type;
++            int i;
++            for (i = 0; i < nseen; i++)
++                if (seen[i].fmt == bound->format && seen[i].type == bound->type && seen[i].rfmt == rf && seen[i].rtype == rt) break;
++            if (i < nseen) copytex = seen[i].ok;
++            else {
++                LOAD_GLES(glGetError);
++                while (gles_glGetError() != GL_NO_ERROR) ;
++                gles_glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
++                int ok = gles_glGetError() == GL_NO_ERROR;
++                if (nseen < 16) { seen[nseen].fmt = bound->format; seen[nseen].type = bound->type; seen[nseen].rfmt = rf; seen[nseen].rtype = rt; seen[nseen].ok = (signed char)ok; nseen++; }
++                copytex = ok; tried = ok;
++                fprintf(stderr, "[gl4es] glCopyTexSubImage2D into %#x/%#x from a %#x/%#x framebuffer: %s\n",
++                        bound->format, bound->type, rf, rt, ok ? "on the GPU" : "refused, read back on the CPU");
++            }
++        }
+         if (copytex || !glstate->colormask[0] || !glstate->colormask[1] || !glstate->colormask[2] || !glstate->colormask[3]) {
+-            gles_glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
++            if (!tried) gles_glCopyTexSubImage2D(target, level, xoffset, yoffset, x, y, width, height);
+             if(((((bound->max_level == level) && (level || bound->mipmap_need)) && (globals4es.automipmap!=3) && (bound->mipmap_need!=0))) && !(bound->max_level==bound->base_level && bound->base_level==0)) {
+                 LOAD_GLES2_OR_OES(glGenerateMipmap);
+                 if(gles_glGenerateMipmap)
 diff --git a/src/gl/uniform.c b/src/gl/uniform.c
 index 98b5614..ad9a640 100644
 --- a/src/gl/uniform.c
