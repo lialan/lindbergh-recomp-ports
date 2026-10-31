@@ -6,7 +6,7 @@ executables to native code: on macOS, and standalone in VR on Meta Quest.**
 Each game's code is lifted to C by
 [**lindberghrecomp**](https://github.com/sp00nznet/lindberghrecomp) and built
 against its runtime, which stands in for the cabinet: its GL, sound, gun and
-board. Nothing is emulated. Four games so far; more will follow, each in its
+board. Nothing is emulated. Five games so far; more will follow, each in its
 own folder under `games/`.
 
 > **No game data here.** No executables, no discs, no filesystem images, no
@@ -41,11 +41,13 @@ home of sp00nznet's recomp projects.
 | [The House of the Dead 4](docs/hotd4/QUEST.md) (2005) | plays, 60 fps, 16:9 | plays, released |
 | [Let's Go Jungle!](docs/lgj/QUEST.md) (2006) | plays, 60 fps, 16:9 | plays, a bit buggy: experimental release |
 | [The House of the Dead 4 Special](docs/hotd4sp/QUEST.md) (2006) | plays, 60 fps, 16:9 | plays, released |
+| [The House of the Dead EX](docs/hotdex/MACOS.md) | experimental, 16:9 | — |
 
-On the Mac all four run in 16:9. **Ghost Squad Evolution** draws its 3D wider
+On the Mac all five run in 16:9. **Ghost Squad Evolution** draws its 3D wider
 than the cabinet's 4:3 and moves its HUD to the screen's edges; menus stay
 4:3 (`LINDBERGH_WIDE=0` brings back the arcade picture). **The House of the
-Dead 4**, **Let's Go Jungle!** and **The House of the Dead 4 Special** run in
+Dead 4**, **Let's Go Jungle!**, **The House of the Dead 4 Special** and
+**The House of the Dead EX** run in
 their boards' own 1360x768 widescreen mode.
 
 | Ghost Squad Evolution | The House of the Dead 4 |
@@ -123,6 +125,9 @@ cd lindbergh-recomp-ports
 
 ./scripts/build-macos.sh hotd4sp /path/to/hotd4sp     # the folder holding elf/ and fs/
 ./scripts/run-macos.sh   hotd4sp /path/to/hotd4sp
+
+./scripts/build-macos.sh hotdex /path/to/hotdex     # the folder holding elf/ and fs/
+./scripts/run-macos.sh   hotdex /path/to/hotdex
 ```
 
 `build-macos.sh` lifts the game into the gitignored `games/<game>/generated/`
@@ -138,6 +143,9 @@ changed is rebuilt. The games start muted.
 | Test / Service | `T` / `S` |
 
 The menu bar rebinds controls, calibrates aim, and sets sound and language.
+In **The House of the Dead EX**, `Space` (the rebindable Action button)
+presses the pedal. Its macOS port is experimental; see the
+[validation notes](docs/hotdex/MACOS.md).
 Runtime switches (`LINDBERGH_*`) are listed in
 [the toolkit's docs](https://github.com/sp00nznet/lindberghrecomp/blob/main/docs/instruments.md).
 
@@ -162,7 +170,7 @@ lindberghrecomp/          the toolkit and runtime (git submodule)
 games/<game>/
   game.conf               what the scripts need to know about the game
   src/host.c              load the ELF, the game's own hooks, enter it
-  src/android_main.c      the Quest app's entry point
+  src/android_main.c      the Quest app's entry point, for games with a Quest port
   generated/              the lifted C (you generate it; gitignored)
 quest/                    the Quest build: deps, gl4es patch, build and install
 quest/<game>/             the game's Android app
@@ -183,6 +191,6 @@ Upstream's Windows build and its notes are in
 The host and the recompilation toolchain are original work, MIT-licensed.
 **No game data, no disc images, no keys, and no circumvention of anything.**
 *Ghost Squad Evolution*, *The House of the Dead 4*, *The House of the Dead 4
-Special* and *Let's Go Jungle!* are © Sega; this is an
+Special*, *The House of the Dead EX* and *Let's Go Jungle!* are © Sega; this is an
 independent, non-commercial preservation project. To help, read
 [CONTRIBUTING.md](CONTRIBUTING.md) first.
