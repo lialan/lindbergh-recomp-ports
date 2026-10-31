@@ -18,6 +18,7 @@
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned capture_serial;
+static struct { GLuint program; char vertex[96], fragment[96]; } pending[1024];
 
 static int shader_source(const char *dir, GLuint shader, const char *filename)
 {
@@ -44,7 +45,6 @@ static void capture_link(GLuint program)
     if (!dir || !*dir) return;
     GLint linked = 0;
     glGetProgramiv(program, GL_LINK_STATUS, &linked);
-    if (!linked) return;
     GLuint attached[16], vertex = 0, fragment = 0;
     GLsizei count = 0;
     glGetAttachedShaders(program, 16, &count, attached);
@@ -56,6 +56,23 @@ static void capture_link(GLuint program)
     }
     if (!vertex || !fragment) return;
     pthread_mutex_lock(&lock);
+    unsigned original = 0;
+    while (original < 1024 && pending[original].program && pending[original].program != program) ++original;
+    if (!linked) {
+        char log[4096] = "";
+        glGetProgramInfoLog(program, sizeof log, NULL, log);
+        /* Preserve the actual source identity before the existing HLE's
+         * missing-varying repair. No reverse reconstruction of source edits. */
+        if (strstr(log, "not written by vertex shader") && original < 1024) {
+            pending[original].program = program;
+            const unsigned serial = ++capture_serial;
+            snprintf(pending[original].vertex, 96, "original_vs_p%u_l%u.glsl", program, serial);
+            snprintf(pending[original].fragment, 96, "original_fs_p%u_l%u.glsl", program, serial);
+            shader_source(dir, vertex, pending[original].vertex);
+            shader_source(dir, fragment, pending[original].fragment);
+        }
+        goto done;
+    }
     /* A shader object can be edited and relinked into several programs. Each
      * successful link needs its own immutable source snapshot. */
     const unsigned serial = ++capture_serial;
@@ -77,7 +94,13 @@ static void capture_link(GLuint program)
         fprintf(out, "%s{\"name\":\"%s\",\"location\":%d,\"size\":%d,\"type\":%u}",
                 i ? "," : "", name, glGetAttribLocation(program, name), size, type);
     }
-    fputs("]}\n", out);
+    fputs("]", out);
+    if (original < 1024 && pending[original].program == program) {
+        fprintf(out, ",\"original_vertex\":\"%s\",\"original_fragment\":\"%s\"",
+                pending[original].vertex, pending[original].fragment);
+        pending[original].program = 0;
+    }
+    fputs("}\n", out);
     fclose(out);
 done:
     pthread_mutex_unlock(&lock);

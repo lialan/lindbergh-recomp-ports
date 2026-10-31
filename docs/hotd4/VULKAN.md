@@ -1,7 +1,9 @@
 # Direct Vulkan renderer
 
-The `work/hotd4-steam-frame` branch targets native Linux ARM64 on Steam Frame.
-The renderer is being replaced; the existing Win64 experiment remains on
+The `work/hotd4-steam-frame` branch develops the shared direct Vulkan backend.
+The current bring-up host is macOS; the first headset target is a standalone
+Quest 3 APK, followed by native Linux ARM64 on Steam Frame. The renderer is
+being replaced; the existing Win64 experiment remains on
 `work/hotd4-windows-openxr`.
 
 ## Runtime path
@@ -149,9 +151,9 @@ fixture now loads its modules and reflected guest uniforms through the archive.
 Uniform writes preserve std140 vector/matrix/array padding and transpose
 semantics, and unchanged values do not advance the data version.
 
-Guest shader-source normalization and link-time compatibility repairs still
-need to be connected to these captured source identities. The standalone pack
-lookup is not yet the game's `glLinkProgram` implementation.
+The macOS guest shader-link handler now selects archived programs using the
+original source identities recorded before reference-renderer compatibility
+repairs. Complete GPU draw/resource submission remains pending.
 
 After compiling a local capture, package and inspect it with:
 
@@ -163,3 +165,72 @@ VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
 ```
 
 The ordinary CTest test uses only source-owned fixtures and needs no game data.
+
+## macOS game-call integration
+
+Use `-DLINDBERGH_RENDERER=VULKAN` to opt into the macOS game bring-up build.
+The default remains `OPENGL`. Vulkan builds generate separate typed guest thunks
+inside their build directory and map the guest ABI to Vulkan-owned state. GL
+headers describe the guest ABI only; neither a host OpenGL context nor Apple's
+OpenGL framework is used. Cabinet, mouse/gun input, audio, guest memory and CPU
+recompilation remain shared.
+
+```sh
+cmake -S . -B build-mac-vulkan-game -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DLINDBERGH_GAMES=hotd4 -DLINDBERGH_RENDERER=VULKAN
+cmake --build build-mac-vulkan-game --target hotd4
+```
+
+This requires existing lifted HOTD4 code plus SDL2, Vulkan headers/loader,
+MoltenVK, glslang, SPIRV-Tools and SPIRV-Cross. The resulting executable links
+the Vulkan loader with no OpenGL framework or unresolved host GL entry points.
+Its hidden, muted boot reaches game graphics initialization and selects its
+first shader program from the archive. The current execution gate is
+`glCopyTexSubImage2D`: pbuffer color/depth image copies and game draw submission
+are not integrated yet. No complete HOTD4 Vulkan frame has been rendered.
+Texture/buffer state capture and uniform writes are present, but their complete
+GPU resource/draw consumption remains pending. Unsupported calls abort by name.
+This build is not ready for gameplay or performance comparison.
+
+Set `LINDBERGH_VULKAN_SHADERS` to the local `.lvsp` archive when running from the
+game's `elf` directory. Capture tooling now saves the actual source before the
+reference renderer's missing-varying repairs. Archive lookup uses that original
+identity, while the compiled SPIR-V contains the offline repair. Carriage
+returns are normalized at guest shader upload to match the reference capture.
+A source-owned repaired-shader fixture exercises this lookup through rendering.
+
+## macOS Vulkan and OpenXR checks
+
+The M4 Pro runs the core raster/readback tests and a 12-frame direct SDL
+swapchain presentation check through MoltenVK. The shared runtime self-test
+passes in both the Vulkan and default OpenGL configurations. ARM64 Linux
+lavapipe tests still pass under Vulkan validation.
+
+The optional direct OpenXR host uses `XR_KHR_vulkan_enable2` instance/device
+factories and the runtime-selected physical device, then creates a two-layer
+world swapchain. It implements session events, view location, frame timing,
+acquire/wait/release and projection submission. Optional required FB foveation
+negotiates a profile and density-map images for world attachments. This path is
+compiled on macOS, but has not been exercised with a live OpenXR runtime or HMD;
+its foveation path has not been hardware validated. Eye-tracked Frame foveation,
+controller integration and connecting the host to guest draw submission remain
+pending. Android loader initialization/JNI integration is also still required
+for the standalone Quest APK.
+
+```sh
+cmake -S lindberghrecomp/src/renderer/vulkan -B build-vulkan-macos -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DLINDBERGH_VULKAN_SDL=ON \
+  -DLINDBERGH_VULKAN_OPENXR=ON -DCMAKE_PREFIX_PATH=/path/to/openxr-install
+cmake --build build-vulkan-macos
+ctest --test-dir build-vulkan-macos --output-on-failure
+./build-vulkan-macos/lindbergh_vulkan_window_test
+./build-vulkan-macos/lindbergh_vulkan_xr_probe
+```
+
+The local SDK/loader was built from Khronos OpenXR-SDK release 1.1.49, commit
+`977f6675bc0057d5a54ed290cb5c71c699b1c0ab`. Its live probe reports
+`XR_ERROR_RUNTIME_UNAVAILABLE` on this Mac. Standalone Quest uses the headset's
+Android OpenXR runtime; it does not require a Mac-to-Quest streaming runtime.
+
+- [MoltenVK platform implementation](https://github.com/KhronosGroup/MoltenVK)
+- [Official OpenXR SDK and loader](https://github.com/KhronosGroup/OpenXR-SDK)

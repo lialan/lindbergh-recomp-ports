@@ -22,6 +22,9 @@ endif()
 
 set(LINDBERGH_GAMES "" CACHE STRING "games to build (empty: every one with lifted code)")
 
+if(LINDBERGH_RENDERER STREQUAL "VULKAN")
+    enable_language(CXX)
+endif()
 add_subdirectory(lindberghrecomp)
 
 function(lindbergh_game id)
@@ -45,7 +48,17 @@ function(lindbergh_game id)
         # Typed GL thunks for a 64-bit host, generated from the host's GL
         # headers (lindberghrecomp/tools/gen_gl_thunks.py): on the Quest from
         # gl4es' when the game has its own set for them
-        if(WIN32)
+        if(LINDBERGH_RENDERER STREQUAL "VULKAN")
+            set(vk_thunks "${CMAKE_CURRENT_BINARY_DIR}/vulkan-thunks-${id}.c")
+            execute_process(COMMAND "${LINDBERGH_VULKAN_PYTHON}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/lindberghrecomp/tools/gen_gl_thunks.py"
+                "${gen}/recomp_imports.h" ${LINDBERGH_GL_HEADERS}
+                OUTPUT_FILE "${vk_thunks}.tmp" COMMAND_ERROR_IS_FATAL ANY)
+            execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${vk_thunks}.tmp" "${vk_thunks}" COMMAND_ERROR_IS_FATAL ANY)
+            file(REMOVE "${vk_thunks}.tmp")
+            set(LINDBERGH_VULKAN_THUNKS_${id} "${vk_thunks}" CACHE INTERNAL "Vulkan guest thunks" FORCE)
+            target_sources(${id} PRIVATE "${vk_thunks}")
+        elseif(WIN32)
             target_sources(${id} PRIVATE "${gen}/recomp_gl_thunks_windows.c")
         elseif(ANDROID AND EXISTS "${gen}/recomp_gl_thunks_android.c")
             target_sources(${id} PRIVATE "${gen}/recomp_gl_thunks_android.c")
