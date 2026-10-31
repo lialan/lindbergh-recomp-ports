@@ -27,10 +27,16 @@
  * GetAdjstGunPos(&x, &y, rawx, rawy, adjust, ...) -> on screen. The position
  * is a byte each, 0..255 across the whole screen. Register arguments: eax =
  * &x, edx = &y. The pointer outside the window is off the screen. */
+static uint32_t g_gun_adjust[2];   /* each player's calibration, as GetAdjstGunPos gets it */
 static void h_gun_pos(CPU *c)
 {
+    /* the stack: raw x, raw y, adjust, player - player 2's gun (dual
+     * wielding) answers from the second pointer, not the first */
+    uint32_t player = rd32(c->esp + 20);
+    if (player < 2) g_gun_adjust[player] = rd32(c->esp + 16);
     int mx, my, w, h;
-    host_mouse_state(&mx, &my, NULL);
+    if (player == 1) { if (!host_gun2_state(&mx, &my)) mx = my = -100000; }
+    else host_mouse_state(&mx, &my, NULL);
     lindbergh_window_size(&w, &h);
     int on = mx >= 0 && my >= 0 && mx < w && my < h;
     /* the nearest of the 256 gun steps, first and last on the window's edges */
@@ -50,10 +56,14 @@ static void h_gun_pos(CPU *c)
  * eax = &a, edx = &b. */
 static void h_gun_accel(CPU *c)
 {
-    static unsigned left;
-    if (host_cabinet_buttons() & CAB_P1_RELOAD) left = 15;
-    float v = left ? 1.0f : 0.0f;
-    if (left) left--;
+    /* whose gun: its calibration sits 12 bytes past the same player's
+     * position calibration (GetAdjstGunPos's, recorded above) */
+    uint32_t adj = rd32(c->esp + 16);
+    int pl = g_gun_adjust[1] && adj == g_gun_adjust[1] + 12;
+    static unsigned left[2];
+    if (host_cabinet_buttons() & (pl ? CAB_P2_RELOAD : CAB_P1_RELOAD)) left[pl] = 15;
+    float v = left[pl] ? 1.0f : 0.0f;
+    if (left[pl]) left[pl]--;
     uint32_t bits; memcpy(&bits, &v, 4);
     wr32(c->eax, bits);
     wr32(c->edx, bits);
