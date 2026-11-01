@@ -32,9 +32,11 @@ def main():
     parser.add_argument('--build-dir', type=Path)
     parser.add_argument('--jobs', type=int, default=6)
     parser.add_argument('--no-apk', action='store_true')
+    parser.add_argument('--offscreen',action='store_true',help='build an executable diagnostic without APK, Activity or OpenXR')
     args = parser.parse_args()
     if args.jobs < 1: parser.error('--jobs must be positive')
-    build = (args.build_dir or root/'build-quest-vulkan'/args.game).resolve()
+    default_build=root/('build-quest-vulkan-offscreen' if args.offscreen else 'build-quest-vulkan')/args.game
+    build = (args.build_dir or default_build).resolve()
     deps, sdk, headers = args.deps.resolve(), args.sdk.resolve(), args.gl_headers_root.resolve()
     ndk = (args.ndk or sdk/'ndk/27.3.13750724').resolve()
     pack = args.shader_pack.resolve()
@@ -44,12 +46,22 @@ def main():
     run('cmake', '-S', root, '-B', build, '-G', 'Ninja',
         '-DCMAKE_TOOLCHAIN_FILE='+str(ndk/'build/cmake/android.toolchain.cmake'),
         '-DANDROID_ABI=arm64-v8a', '-DANDROID_PLATFORM=android-29', '-DCMAKE_BUILD_TYPE=Release',
-        '-DLINDBERGH_GAMES='+args.game, '-DLINDBERGH_RENDERER=VULKAN', '-DLINDBERGH_OPENXR=ON',
-        '-DBUILD_TESTING=OFF', '-DLINDBERGH_GL_HEADERS='+str(headers/'GL/gl.h')+';'+str(headers/'GL/glext.h'),
+        '-DLINDBERGH_GAMES='+args.game, '-DLINDBERGH_RENDERER=VULKAN', '-DLINDBERGH_OPENXR='+('OFF' if args.offscreen else 'ON'),
+        '-DBUILD_TESTING=OFF', '-DLINDBERGH_VULKAN_OFFSCREEN='+('ON' if args.offscreen else 'OFF'), '-DLINDBERGH_GL_HEADERS='+str(headers/'GL/gl.h')+';'+str(headers/'GL/glext.h'),
         '-DSDL2_DIR='+str(deps/'sdl2-android/lib/cmake/SDL2'),
         '-DOPENAL_DIR='+str(deps/'openal-soft'), '-DOPENAL_LIB='+str(deps/'openal-android/libopenal.so'),
         '-DOpenXR_DIR='+str(deps/'oxr'))
-    run('cmake', '--build', build, '--target', args.game, '--parallel', args.jobs)
+    target=args.game+'_vulkan_offscreen' if args.offscreen else args.game
+    run('cmake', '--build', build, '--target', target, '--parallel', args.jobs)
+    if args.offscreen:
+        manifest={'game':args.game,'renderer':'native-vulkan-offscreen-diagnostic','openxr':False,
+                  'executable_sha256':hashlib.sha256((build/target).read_bytes()).hexdigest(),
+                  'library_sha256':hashlib.sha256((build/'libmain.so').read_bytes()).hexdigest(),
+                  'game_shader_sha256':hashlib.sha256(pack.read_bytes()).hexdigest(),
+                  'world_controls_performance_accepted':False}
+        (build/'offscreen-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+        print('Offscreen diagnostic:',build/target,'(no APK or OpenXR session)')
+        return
     if args.no_apk: return
     libs, assets = build/'apk-libs/arm64-v8a', build/'apk-assets/vulkan'
     libs.mkdir(parents=True, exist_ok=True)

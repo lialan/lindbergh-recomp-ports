@@ -463,3 +463,74 @@ desktop stereo/simulated-eye modes. Ordinary desktop execution stays at 1x.
 The environment override wins. This restores the identified Mac scenario;
 remaining visual issues, turning coverage and Quest combat cost still require
 verification. No headset session was used for this milestone.
+
+## Actual guest offscreen diagnostics on Quest
+
+`LINDBERGH_VULKAN_OFFSCREEN=ON` is an explicit build mode, incompatible with
+OpenXR. It uses the same game/lifted code, guest ABI, queue, camera/control
+policy and Vulkan core with an owned two-layer target and a dummy SDL window.
+It does not link the SDL Vulkan-surface host or OpenXR host. Normal APK builds
+explicitly select `OFF`, so the diagnostic cannot silently replace the headset
+host. Android builds add `<game>_vulkan_offscreen`, calling `game_main` directly
+without SDL's Activity/storage entry point. The render-target scaling policy
+is shared with the headset path. Optional constant density-map attachments use
+the device's supported texel extent; their uniform values are diagnostic,
+not the runtime's foveation pattern.
+
+Build HOTD4 Special with the normal builder and the additional `--offscreen`
+flag, a separate build directory, and the same offline shader pack/GL ABI
+headers. This produces no APK. For example:
+
+```sh
+python3 quest/build_vulkan.py hotd4sp --offscreen \
+  --shader-pack build-vulkan-shaders-hotd4sp-stereo/hotd4sp.lvsp \
+  --gl-headers-root /path/to/mesa/include \
+  --build-dir build-quest-vulkan-offscreen
+python3 ~/.local/bin/quest3-lock python3 quest/run_vulkan_offscreen.py \
+  --build-dir build-quest-vulkan-offscreen \
+  --shader-pack build-vulkan-shaders-hotd4sp-stereo/hotd4sp.lvsp \
+  --output build-quest-vulkan-offscreen/unique-run \
+  --frames 120 --timeout 90 --width 2064 --height 2280 --density 1 --dual
+```
+
+The entire runner must remain inside the shared lock wrapper. It targets the
+explicit serial, verifies the ELF hash against the lifted input and checks
+available space, then copies `elf`/`fs` into a private UUID tree. NVRAM, config,
+shader cache, captures and logs are private too. It never installs or launches
+an app, creates an XR session, or changes wake/proximity/Guardian settings.
+Cleanup stops only a process whose command line matches its own UUID, removes
+the private copy and verifies both installed HOTD4SP APK hashes. A fresh output
+directory retains binary/compiler/environment provenance, streaming logs,
+CPU-boundary timing and two-eye captures. Optional `--pipeline-cache` loads a
+same-device cache from a prior diagnostic; incompatible driver cache data is
+still rejected by the existing renderer helper.
+
+The first CLI attempts reached Vulkan and then failed in SDL's audio thread:
+`Android_JNI_AudioSetThreadPriority` dereferences the missing JavaVM even for
+the dummy audio driver. Retained module/offset and unwind output established
+that failure. Only the diagnostic Android build now runs the existing SEGA
+mix/voice clock on an owned pthread and discards output. The thread stops and
+joins at exit. Production audio remains unchanged. The crash reporter also
+reports module offsets for unnamed functions and an Android unwind trace.
+
+Mac dummy-window boot and two-eye readbacks pass validation. Actual Quest
+Adreno boot first passed four frames, then 120 frames at 2064x2280 per eye with
+full-rate density attachments on the final target and world pbuffer. Both
+eye images are valid, nonblank and different. Their startup screen and gun/UI
+rendering are visible in `build-quest-vulkan-offscreen/quest-fdm-stereo-120/`.
+That first capture's FPS label used a simulated-input clock and is not timing
+evidence; the label now uses a separate elapsed host clock for simulated
+controllers, with a CPU regression test. The runner also overrides settings
+explicitly rather than inheriting the copied tree's FPS setting.
+
+The subsequent actual-guest run completed 3601 frames with dual simulated gun
+input and native shot rays, retaining two valid 2064x2280 combat images. The
+restored street wall, world textures and HUD are visible. Artifacts:
+`build-quest-vulkan-offscreen/quest-fdm-game-3600/` (report, game log,
+capture/capture.right images, raw timing and analysis). All these device
+sessions cleaned their private trees and preserved installed APK hashes.
+These are real Adreno guest/renderer results, but do not establish physical
+controller accuracy, runtime foveation-map acquisition, headset display
+correctness, audio output, thermal stability or VR/combat pacing acceptance.
+The first measured combat window contains large stalls, detailed in the
+performance document; that gate remains open.

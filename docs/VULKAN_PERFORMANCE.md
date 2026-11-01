@@ -287,3 +287,36 @@ binary/settings manifests and analysis remain in
 `hotd4sp-dual-cull-cadence.json`. Sustained Quest GL/Vulkan comparisons must
 both render the restored geometry and retain the existing matched-quality
 and compositor/GPU requirements.
+
+## First actual Quest guest combat diagnostic
+
+The offscreen actual-guest build completed 3601 frames on Adreno 740 at
+2064x2280 per eye with a constant full-rate density map, the same shared
+renderer and restored culling volume, dual simulated controllers and native
+shot rays. The settings are explicit, generated code uses the recorded `-O3`
+release flags, and the startup cache came from the preceding 120-frame run.
+No app/OpenXR session was used. The mix/voice clock runs in a diagnostic
+pthread because SDL's Android audio thread requires Java. This is a rendering
+and CPU-cadence diagnostic, not a quality-equivalent GL/XR performance baseline.
+
+The raw combat window is frames 3000–3598 (598 intervals), ending before the
+final screenshot readback. Mean CPU return cadence is 52.90 FPS, median
+interval 16.57 ms, p95 20.52 ms, p99 32.12 ms, and max 983.44 ms at 3056→3057.
+Other retained stalls include 159.33 ms at 3073→3074, 136.94 ms at 3152→3153,
+and 95.50 ms at 3122→3123. The late burst reaches ten intervals. Later runtime
+logs return to about 60 FPS; that does not cancel these stalls.
+
+The observed spike coincides with the beginning of the heavier world interval;
+pipeline/resource preparation is a hypothesis pending a prepared-cache and
+preparation-timing control. The initial cache contains startup, not full combat
+coverage. Do not classify the stall as loading and remove it from combat, or
+claim steady 60 FPS from the later mean. Retained evidence is under
+`build-quest-vulkan-offscreen/quest-fdm-game-3600/`; the installed GL/Vulkan APKs
+were unchanged and private test data was removed before releasing the lock.
+
+The diagnostic also caught a misleading FPS label: simulated input time advanced
+at exactly 60 Hz regardless of host elapsed time. Native fake-controller UI now
+uses a separate host readout clock, while actual OpenXR continues using its
+runtime timing. Source-owned tests prevent a fast/slow simulation clock from
+opening the FPS label's measurement window early. Compositor/GPU timing and
+physical VR tests remain required for acceptance.
