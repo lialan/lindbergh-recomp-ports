@@ -1,8 +1,11 @@
 # Direct Vulkan renderer
 
 The `work/hotd4-steam-frame` branch develops the shared direct Vulkan backend.
-The current bring-up host is macOS; the first headset target is a standalone
-Quest 3 APK, followed by native Linux ARM64 on Steam Frame. The renderer is
+The current bring-up host is macOS; the first game target is HOTD4 Special on
+standalone Quest 3, then HOTD4, Ghost Squad Evolution and Let's Go Jungle.
+Native Linux ARM64 on Steam Frame follows. Shared mechanisms and the current
+resumption checkpoint are tracked in [VULKAN_RUNTIME.md](../VULKAN_RUNTIME.md).
+The renderer is
 being replaced; the existing Win64 experiment remains on
 `work/hotd4-windows-openxr`.
 
