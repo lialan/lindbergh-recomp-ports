@@ -658,3 +658,15 @@ checks passed; cleanup errors are empty, original GL APK hash and recorded
 external-file fingerprints are unchanged, and the shared lock was released.
 Focused acquired-map rendering, sustained combat pacing, physical controls,
 thermal testing and matched-quality OpenGL comparison remain open.
+
+## Pbuffer retirement without a forced GPU drain
+
+The shared guest pbuffer destruction gap is implemented using queue-fenced
+target/pipeline retirement. Deletion records pending packets and closes their
+pass; it adds no submission or GPU wait. The regular combat draw path gains
+no per-draw retention work. Both Mac validation and Quest GPU tests verify
+three in-flight stereo frames, exact slot retirement and unchanged submission
+counts. A real guest-ABI fixture also passes target destruction/recreation,
+both-eye color captures and unfinished shutdown on both platforms. Normal
+Mac game and Quest Vulkan APK builds pass. This closes an abort/lifetime gap;
+it provides no new FPS result or headset/compositor acceptance evidence.

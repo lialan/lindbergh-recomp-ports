@@ -734,3 +734,41 @@ on UNORM in both eyes, with zero first-use pipelines for the tested variants.
 Source-owned device fixtures were removed under the shared lock; retained
 evidence is `build-vulkan-android-core/quest-pipeline-portability-current`.
 These fixtures do not establish game shader coverage or headset combat pacing.
+
+## Deferred guest pbuffer retirement
+
+Destroying a guest pbuffer no longer aborts. A deleted current drawable remains
+usable until unbound, matching GLX lifetime semantics. On retirement, queued
+packets are recorded and the active pass closes; the target's clear renderer,
+live program renderers and portable-recipe renderers are detached from their
+caches. Their ownership and the target attachments move together into a
+`RetiredTarget` retained by the frame ring. Initialization, logical-size and
+HUD-target entries are removed so a later target cannot inherit stale state.
+
+`FrameRing::retire` works during recording or between frames. It retains the
+group on the current recording slot or the latest submitted queue slot;
+that queue's latest fence covers earlier submissions too. It adds no GPU
+wait, command or submission. Shutdown first drains all submitted fences before
+releasing any slot's resources, including an unfinished recording that owns
+retired objects still used by earlier slots. The ordinary combat draw path
+adds no per-draw ownership bookkeeping.
+
+GPU tests cover three in-flight stereo frames, retirement during/between
+recording, no-work immediate destruction, exact slot reuse, unchanged
+submission counts and unfinished shutdown. Recipe tests transfer cached
+pipelines into retirement before submitting actual sRGB/FDM draws.
+
+The optional `LINDBERGH_VULKAN_GUEST_TEST=ON` target
+`lindbergh_vulkan_guest_target_test` additionally compiles the real
+`vulkan_guest.cpp` with inert cabinet/profile/settings producers. It exercises
+current deletion followed by drawing, unbound deletion with queued work,
+18 resize/recreation cycles, repeated/unused deletion, both-eye readbacks and
+unfinished shutdown. Configure `LINDBERGH_GL_HEADERS` as for the game build;
+SDL2 supplies host utilities only, and no host GL calls are used. Mac
+KosmicKrisp validation and the Quest Adreno GPU/core and real-ABI tests pass.
+Retained device evidence is under
+`build-vulkan-android-core/quest-target-retirement-current` and
+`build-vulkan-android-core/quest-guest-target-retirement-current`; both sessions
+cleaned their source-owned fixtures under the shared lock without APK/UI
+changes. Mac CTest runs both suites with no validation errors. These are
+resource-lifetime/ABI correctness tests, not headset/controller/combat acceptance.
