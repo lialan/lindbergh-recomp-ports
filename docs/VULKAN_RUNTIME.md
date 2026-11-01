@@ -343,7 +343,7 @@ A 3600-frame Mac game repeat shows both guns, flashes and red/blue beams over
 combat without validation errors. Inspect
 build-vulkan-reference/hotd4sp-overlay-dual-3600.png and
 build-mac-vulkan-game/overlay-pass-3600.log. The image also exposes scene-edge
-gaps that still need diagnosis; it is not final visual acceptance. No headed
+gaps that required diagnosis (the street-wall case is covered below); it is not final visual acceptance. No headed
 Quest session was run for this overlay milestone. Settings/capture/FPS panels,
 remaining aiming/classification policies, color handling and actual headset
 combat quality/performance remain open.
@@ -413,3 +413,53 @@ interaction, Android restart/refresh/recenter behavior, full game visual
 parity or Quest combat performance. No headed Quest session was run for this
 milestone. Capture controls, remaining aiming/HUD policies, scene-edge gaps,
 color/depth format parity and sustained Quest combat pacing remain open.
+
+## Shared NN culling and the Special street-edge gap
+
+HOTD4's existing OpenXR hook for `nnSetClipPlane` now lives in the common
+`runtime/nn_culling.{h,c}` implementation. It temporarily divides the two
+focal-length inputs while the guest builds its CPU side planes, calls the
+original lifted routine and restores the render-projection bits before
+returning. It adds no render pass, GPU work, allocation or GPU wait. Drawing
+newly visible objects can of course increase CPU/GPU work; that cost remains
+part of the combat performance gate.
+
+The supported HOTD4 Special image's stripped counterpart is at `0x08346AA0`.
+Its lifted code has the same projection-type split, four normalized side
+planes and focal-length reads as HOTD4's named routine at `0x08303008`.
+Per-title metadata is limited to the entry and focal-length addresses:
+
+| Title | Plane builder | Projection X | Projection Y |
+| --- | --- | --- | --- |
+| HOTD4 | `guest_symbol("nnSetClipPlane")` | `0x0A767C80` | `0x0A767C94` |
+| HOTD4 Special | `0x08346AA0` | `0x0A6F34C0` | `0x0A6F34D4` |
+
+The Special candidate is the unique lifted function with the relevant scalar
+divides/global plane writes; source comparison confirms matching math rather
+than identical register allocation. The real game invokes it: the opt-in
+`LINDBERGH_CULL_LOG=1` reports its first three focal input changes. Pure tests
+verify shortened inputs inside the guest callback, balanced guest return-stack
+handling, bit-exact restoration (including signed zero/NaN/infinity), disabled/
+invalid overrides and failed installation. One hook can be installed per
+process. The `LINDBERGH_CULL_WIDEN=1` control leaves the cabinet behavior intact.
+
+A first cabinet-style-input Mac comparison did not reproduce the reported
+edge gap, so it was not used as a fix result. The exact dual-controller/shot-ray
+scenario did reproduce it: at frame 3600 with culling unchanged, the street's
+near left wall/ground is absent, exposing sky/clear color beneath the bridge.
+The otherwise matched 4x side-plane run restores the wall and ground. Both
+runs exit normally with validation enabled, and use the same render projection,
+resolution, pose/controller script and shader archive. Enemy/animation timing
+varies between runs; this is visual evidence for that static-scene gap rather
+than pixel-identical whole-frame replay.
+
+Artifacts are retained in `build-vulkan-reference/hotd4sp-dual-cull{1,4}-3600.png`
+and `build-mac-vulkan-game/dual-cull{1,4}-3600.log`. The initial desktop OpenGL
+stereo replay capture has nested composition and a black right view; it is not
+a valid image-parity baseline for the Quest multiview path.
+
+HOTD4 and Special now share the established 4x default in OpenXR and explicit
+desktop stereo/simulated-eye modes. Ordinary desktop execution stays at 1x.
+The environment override wins. This restores the identified Mac scenario;
+remaining visual issues, turning coverage and Quest combat cost still require
+verification. No headset session was used for this milestone.

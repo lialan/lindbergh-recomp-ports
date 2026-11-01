@@ -18,6 +18,7 @@
 
 #include "xr_overlay.h"
 #include "game_profile.h"
+#include "nn_culling.h"
 #include "lindbergh_rt.h"
 
 /* The gun, at the two functions the game's gun code reads it through. Both
@@ -91,42 +92,6 @@ static void h_sprite_res(CPU *c)
     c->eax = 5;                 /* 16:9 */
 }
 
-#ifdef LINDBERGH_OPENXR
-/* In the headset the view is far wider than the cabinet's monitor, and the
- * head turns: the NN library's clip test (nnSetClipPlane builds its four
- * side planes from the projection's focal lengths) dropped scenery and
- * enemies still in view. While it builds them, the focal lengths are taken
- * LINDBERGH_CULL_WIDEN times shorter (default 4; 1 keeps the game's), so the
- * planes enclose a view that much wider; the projection itself is untouched. */
-#define NN_PROJ_X 0x0a767c80u           /* the projection's x and y scale, as nnSetClipPlane reads them */
-#define NN_PROJ_Y 0x0a767c94u
-extern void (*dispatch_lifted(uint32_t va))(CPU *);
-static void (*g_clip_plane)(CPU *);
-static float g_cull_widen = 4.0f;
-static void h_clip_plane(CPU *c)
-{
-    uint32_t kx = rd32(NN_PROJ_X), ky = rd32(NN_PROJ_Y);
-    float fx, fy;
-    memcpy(&fx, &kx, 4); memcpy(&fy, &ky, 4);
-    fx /= g_cull_widen; fy /= g_cull_widen;
-    uint32_t wx, wy;
-    memcpy(&wx, &fx, 4); memcpy(&wy, &fy, 4);
-    wr32(NN_PROJ_X, wx); wr32(NN_PROJ_Y, wy);
-    push32(c, 0xDEADBEEFu);             /* the return slot its ret pops */
-    g_clip_plane(c);
-    wr32(NN_PROJ_X, kx); wr32(NN_PROJ_Y, ky);
-}
-static void widen_culling(void)
-{
-    const char *v = getenv("LINDBERGH_CULL_WIDEN");
-    if (v && *v) g_cull_widen = (float)atof(v);
-    uint32_t va = guest_symbol("nnSetClipPlane");
-    if (!(g_cull_widen > 1.0f) || !va || !(g_clip_plane = dispatch_lifted(va))) return;
-    if (guest_override("nnSetClipPlane", h_clip_plane))
-        fprintf(stderr, "[hotd4] clip test %.1fx wider than the camera, for the headset\n", g_cull_widen);
-}
-#endif
-
 /* whether the HUD keeps to the screen's edges, or stays a centred 4:3 block */
 static int hud_anchored(void) { return 1; }
 
@@ -196,9 +161,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "[hotd4] aim: the gun is where the pointer is\n");
     if (guest_override("_Z16GetAdjstGunAccelPfS_ttP23GunAccelAdjustValueType", h_gun_accel))
         fprintf(stderr, "[hotd4] reload: the reload input shakes the gun\n");
-#ifdef LINDBERGH_OPENXR
-    widen_culling();
-#endif
+    nn_culling_install("nnSetClipPlane",guest_symbol("nnSetClipPlane"),0x0a767c80u,0x0a767c94u,nn_culling_default_widen());
 
     CPU cpu;
     guest_init_cpu(&cpu);

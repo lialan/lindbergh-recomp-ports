@@ -13,6 +13,7 @@
 
 #include "xr_overlay.h"
 #include "game_profile.h"
+#include "nn_culling.h"
 #include "lindbergh_rt.h"
 #include "stereo.h"
 
@@ -175,6 +176,12 @@ int main(int argc, char **argv)
         return 1;
     game_profile_apply(&k_profile);
     hle_register_all();
+    /* Same NN side-plane builder as HOTD4. The stripped supported build reads
+     * focal lengths at A6F34C0/A6F34D4 and writes four planes at A6F3468.
+     * Like HOTD4, enclose the wider eye/head view without changing its render
+     * projection. LINDBERGH_CULL_WIDEN=1 restores the cabinet control. */
+    nn_culling_install("nnSetClipPlane",0x08346aa0u,0x0a6f34c0u,0x0a6f34d4u,nn_culling_default_widen());
+
     guest_override_va("keychip decrypt", KEY_CRYPT, h_key_crypt);
     {
         const char *g = getenv("LINDBERGH_GOD");

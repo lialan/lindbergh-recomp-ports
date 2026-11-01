@@ -11,7 +11,7 @@ performance acceptance.
 ## Comparable runs
 
 Use the same game assets, combat inputs, view resolution, image quality,
-multiview policy, foveation mode/level, game pacing and actual runtime refresh
+multiview policy, CPU culling volume, foveation mode/level, game pacing and actual runtime refresh
 for baseline and candidate. Record build/APK hashes and settings alongside
 results. Warm shaders/assets first, separate loading from combat, and include
 heavy effects, slow motion, dual wield and longer scenes. Record thermal and
@@ -256,3 +256,34 @@ GPU waits, descriptor allocations or render passes in this path. Real user
 choices still save config and may request a refresh or restart, as on GL;
 those events must remain identifiable in performance captures. This does not
 close the cold-pipeline, full-game FDM or sustained combat acceptance gates.
+
+## Culling correctness before comparing speed
+
+The matched simulated dual-controller Mac scene exposed a missing near-left
+wall/ground at the unchanged cabinet culling volume. HOTD4 Special now shares
+HOTD4's NN side-plane widening mechanism, restoring that visible geometry in
+the tested scene without changing the render projection. Its 4x OpenXR default
+is shared by GL and Vulkan; 1x remains an explicit diagnostic control.
+Do not claim a speed win by using the 1x run that omits required visible objects.
+The wrapper itself performs two scalar divisions and restores two words;
+additional geometry still has to be measured on Quest at matched quality.
+The retained validation captures are correctness evidence, not FPS acceptance.
+
+A separate warm Mac CPU-cadence control used simulated dual controllers and
+native shot rays, 1360x768, frames 3000–3599 (599 intervals per run), with
+validation, screenshots, cull logging and preparation logging disabled:
+
+| Diagnostic | Mean cadence (FPS) | p99 interval (ms) | Max (ms) | Slowest rolling 60-interval cadence (FPS) |
+| --- | ---: | ---: | ---: | ---: |
+| 1x, missing required geometry | 60.157 | 19.230 | 25.463 | 59.818 |
+| 4x, restored geometry | 60.166 | 19.208 | 25.236 | 59.835 |
+
+No additional CPU pacing regression is visible in this short, game-paced
+pair. It does not measure uncapped throughput, GPU cost, cold-cache behavior,
+thermal stability or headset display delivery. The 1x row is a diagnostic
+cost control, not an acceptable visual-quality baseline. Original CSV traces,
+binary/settings manifests and analysis remain in
+`build-vulkan-reference/hotd4sp-dual-cull*-cadence*` and
+`hotd4sp-dual-cull-cadence.json`. Sustained Quest GL/Vulkan comparisons must
+both render the restored geometry and retain the existing matched-quality
+and compositor/GPU requirements.
