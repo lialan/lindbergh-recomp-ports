@@ -705,3 +705,32 @@ ranges, unaligned decoding, index overflow, native primitive eligibility and
 without validation messages. Artifacts are retained under
 `build-mac-vulkan-offscreen/index-native-game-3600.*`. Quest evidence and
 performance limits are recorded in the performance document.
+
+## Portable target variants before gameplay
+
+The packaged offscreen recipe seed described RGBA8 UNORM targets with density
+maps. OpenXR selects sRGB swapchain images, while its unfocused scratch target
+has no density map. Exact target-class matching therefore skipped known
+shader/state descriptions for these destinations.
+
+`PipelineRecipes::prepare` now reconstructs known descriptions across RGBA8
+UNORM/sRGB and BGRA8 UNORM/sRGB targets, including differing density-map and
+final-layout policies. Every pipeline is built against the actual destination
+render pass; pipeline handles are never shared across incompatible render
+passes. Shader identities, vertex layouts, raster state, layer count and
+bottom-origin convention remain explicit. Target-origin/view-count mismatches
+are still rejected for prewarming. A snapshot prevents new concrete catalogue
+entries inserted by callbacks from extending the preparation traversal.
+
+The unfocused scratch target is allocated and prepared during XR initialization,
+alongside swapchain targets, rather than at the first unfocused game draw.
+All new work occurs during target preparation; no per-draw format matching,
+shader compilation, file I/O or synchronization was added to the hot path.
+
+Mac KosmicKrisp validation passes actual stereo draws using the preloaded sRGB
+variant. Quest 3 GPU fixtures additionally pass non-FDM-to-FDM and FDM-only-seed
+to non-FDM reconstruction. Half-linear red reads back near 188 on sRGB and 128
+on UNORM in both eyes, with zero first-use pipelines for the tested variants.
+Source-owned device fixtures were removed under the shared lock; retained
+evidence is `build-vulkan-android-core/quest-pipeline-portability-current`.
+These fixtures do not establish game shader coverage or headset combat pacing.

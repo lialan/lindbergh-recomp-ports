@@ -617,3 +617,44 @@ The normal Vulkan/OpenXR APK also builds with the current native library and
 and seed bytes and no host GL imports. APK SHA-256:
 `621fe53a4dee28d43bb6b94992e21fb15f5cf4055e5cdf1bfce5f1e78d6e1e93`.
 It was not installed or physically accepted in this milestone.
+
+## Native OpenXR target-variant prewarming
+
+The exact-class recipe filter missed the actual sRGB swapchain targets:
+the seed used RGBA8 UNORM (37), whereas the runtime selected RGBA8 sRGB (43).
+It also missed the unfocused target without a density map. Portable descriptions
+now reconstruct pipelines for each destination render pass before use. Shader
+identity, vertex inputs, raster state, origin and layer count remain constrained;
+see the runtime document for the portability boundary and GPU tests.
+
+Mac KosmicKrisp validation and Quest Adreno GPU fixtures pass stereo sRGB
+encoding, FDM/non-FDM reconstruction, independent descriptor layouts, and zero
+first-use compilation for the tested variants. The source-owned Quest fixture
+session completed and removed its temporary directory without APK/UI changes.
+
+The actual HOTD4 Special APK then completed 3600 frames from a unique app-owned
+internal copy. Artifact directory:
+`build-quest-vulkan-game/quest-xr-portable-prewarm-1`. Tested APK SHA-256:
+`080903b7bd6a20c3085c55e0042a2dd322095aa2fc1fffb69cf12eb4f4b1885f`.
+The seed retained 197 pipelines per sRGB swapchain image, 197 for the unfocused
+target and 65 for the guest world pbuffer: 853 total, with zero catalogue
+first-use pipelines at shutdown. Preparation included 5.67 seconds for the first
+sRGB image and 7.94 seconds for the scratch target on a cold driver cache;
+this work occurred before game drawing. The previous private run logged 185
+new pipelines after frame 1, including an 821.29 ms preparation event; this run
+logged none after frame 1. Three other pipeline creations remain at frames 0-1
+outside the catalogue, so "zero catalogue first uses" is not a claim of zero
+pipeline creation throughout startup or of complete shader coverage.
+
+This is compilation/lifecycle evidence, not a matched performance comparison.
+The diagnostic scratch target in that APK used the 640x480 initial state default;
+the final source/build corrects it to the actual 1024x768 initialization arguments.
+Recipe resolution independence is covered by GPU tests, but that final size
+correction has not been rerun on device. OpenXR stayed IDLE (state 1), reported
+90 Hz and never acquired a renderable game target. No display capture was
+generated; the collector correctly lists it as missing. Frame/submission traces
+are retained for diagnosis only. The fresh marker and real private-game path
+checks passed; cleanup errors are empty, original GL APK hash and recorded
+external-file fingerprints are unchanged, and the shared lock was released.
+Focused acquired-map rendering, sustained combat pacing, physical controls,
+thermal testing and matched-quality OpenGL comparison remain open.
