@@ -204,6 +204,12 @@ def main():
         try:
             after=apk_hashes(ORIGINAL);report["original_apk_after"]=after
             if before!=after:cleanup.append("original GL APK changed")
+            # A launch without the private-game extras (the system relaunching
+            # the app after a disconnect) writes its log into the app's own
+            # folder: this run's artifact, kept in OUTPUT and removed there.
+            if original.get(LOG) is None and exists(own+"/"+LOG):
+                save("relaunch-"+LOG,command("exec-out","cat",own+"/"+LOG,check=False))
+                shell("rm","-f",own+"/"+LOG,check=False)
             restored=original_files();report["original_files_after"]=restored
             if restored!=original:cleanup.append("experimental app files were not restored exactly")
         except Exception as error:cleanup.append("original APK verification: "+repr(error))
