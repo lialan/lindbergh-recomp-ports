@@ -25,9 +25,11 @@ def main():
     parser.add_argument("--apk",type=Path,required=True)
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--seconds",type=int,default=70)
+    parser.add_argument("--interactive",action="store_true",
+                        help="normal play for a person: no autoplay/exit/diagnostics; runs until the app exits or OUTPUT/STOP exists")
     parser.add_argument("--set",action="append",default=[],metavar="KEY=VALUE",help="override/add one game environment entry")
     args=parser.parse_args()
-    if not 10<=args.seconds<=150:parser.error("watchdog must be 10..150 seconds")
+    if not args.interactive and not 10<=args.seconds<=150:parser.error("watchdog must be 10..150 seconds")
     sdk=Path.home()/"Library/Android/sdk"
     aapt=sorted((sdk/"build-tools").glob("*/aapt2"))[-1]
     badging=subprocess.run([str(aapt),"dump","badging",str(args.apk.resolve())],capture_output=True,text=True,check=True).stdout
@@ -95,6 +97,8 @@ def main():
              "LINDBERGH_VULKAN_SUBMISSION_TIMINGS":private+"/submissions.csv","LINDBERGH_VULKAN_PREPARE_TIMING":"1",
              "LINDBERGH_VULKAN_COMMAND_STATS":"1","LINDBERGH_VULKAN_STATE_FILTER":"1","LINDBERGH_VULKAN_INDEX_REUSE":"1",
              "LINDBERGH_SHOT":private+"/capture.ppm","LINDBERGH_SHOT_FRAME":"120"}
+        if args.interactive:
+            env={"LINDBERGH_GL_THREAD":"1","LINDBERGH_VULKAN_CACHE":private+"/pipelines.bin","LINDBERGH_NVRAM":private+"/nvram.bin"}
         for item in args.set:
             key,_,value=item.partition("=")
             if not key or not _:raise RuntimeError("--set requires KEY=VALUE")
@@ -131,7 +135,16 @@ def main():
         # system focus/Activity transitions instead of the requested app.
         launched=True;save("launch.txt",shell("am","start","-n",PACKAGE+"/"+ACTIVITY,"--ez","lindbergh.require_private_game","true","--es","lindbergh.private_game",private))
         start=time.monotonic();pid=""
-        while time.monotonic()-start<args.seconds:
+        stop=out/"STOP"
+        if args.interactive:print("Interactive session running; create",stop,"to end it",flush=True)
+        while args.interactive or time.monotonic()-start<args.seconds:
+            if args.interactive and stop.exists():break
+            if subprocess.run([adb,"-s",SERIAL,"get-state"],capture_output=True,timeout=10).returncode:
+                # Unplugged (e.g. played untethered): not an app exit. An
+                # interactive session waits for the cable; a bounded one ends.
+                report["device_disconnected"]=True
+                if not args.interactive:break
+                time.sleep(2);continue
             current=shell("pidof",PACKAGE,check=False).stdout.decode().strip()
             if current and not pid:pid=current.split()[0];report["pid"]=pid
             if pid and not current:report["early_process_exit"]=True;break
@@ -152,6 +165,9 @@ def main():
     except Exception as error:
         report["execution_error"]=repr(error);raise
     finally:
+        if args.interactive and (launched or installed):
+            print("Waiting for the headset to reconnect for cleanup...",flush=True)
+            subprocess.run([adb,"-s",SERIAL,"wait-for-device"],check=False)
         if launched or installed:
             try:save("stop.txt",shell("am","force-stop",PACKAGE))
             except Exception as error:cleanup.append("stop: "+repr(error))
