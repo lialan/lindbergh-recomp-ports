@@ -706,3 +706,11 @@ active draw targets, movie passes and game state remain to be traced. This
 does not establish an expected transition or complete visual correctness.
 Per user instruction, further work is local/Mac
 only until headset testing is requested again.
+
+The Mac-only `black-classify-1800` trace completes 1801 frames and places all
+frame-1800 guest draws on target 0 (logical 1024x768), using the HUD lens
+1.8112/2.4149. They classify as HUD or full-screen fill; the world-draw counter
+stays zero. This explains why the unused/black drawable-1 probe could not
+locate the visible image. Further diagnosis should inspect those HUD/movie
+shaders, uploaded textures and depth/composition state rather than treating
+the frame as a failed 3D world pass. It is not a combat-performance sample.
