@@ -24,7 +24,7 @@ cmake --build "$B/offscreen" --target "$GAME" --parallel "$(nproc)" >/dev/null
 R=$B/offscreen-run
 rm -rf "$R"; mkdir -p "$R"
 FIXED=$B/inputs/fixed.lvsp; [ -f "$FIXED" ] || FIXED=$B/offscreen/lindberghrecomp/src/renderer/vulkan/fixed-pack/fixed.lvsp
-export VK_DRIVER_FILES=$(ls /usr/share/vulkan/icd.d/lvp_icd.*.json | head -1)
+export VK_DRIVER_FILES=$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -1) LINDBERGH_VULKAN_ALLOW_SOFTWARE=1
 export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy LINDBERGH_MUTE=1 LINDBERGH_GL_THREAD=1 \
     LINDBERGH_HIDDEN=1 LINDBERGH_WINDOW=640x480 LINDBERGH_EXIT_AFTER=$FRAMES LINDBERGH_AUTOSTART=8 \
     LINDBERGH_SHOT_FROM_GUN=1 LINDBERGH_VULKAN_FAKE_YAW=0 LINDBERGH_VULKAN_FAKE_GUN=1 \
