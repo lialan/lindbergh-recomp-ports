@@ -81,7 +81,7 @@ def main():
          "LINDBERGH_HIDDEN":"1","LINDBERGH_WINDOW":"640x480","LINDBERGH_EXIT_AFTER":str(args.frames),
          "LINDBERGH_AUTOSTART":"8","LINDBERGH_SHOT_FROM_GUN":"1","LINDBERGH_VULKAN_FAKE_YAW":"0",
          "LINDBERGH_VULKAN_FAKE_GUN":"2" if args.dual else "1",
-         "LINDBERGH_XR_SET":f"width={args.width},resolution={args.height},dual={'on' if args.dual else 'off'},scale=1,screen=3,aim=15,hand=right,laser=laser,sight=none,crosshair=on,gun=on,hud_pitch=0,coins=auto,fps=off",
+         "LINDBERGH_XR_SET":f"width={args.width},resolution={args.height},dual={'on' if args.dual else 'off'},scale=1,screen=3,aim=15,hand=right,laser=laser,sight=none,crosshair=on,gun=on,hud_pitch=0,coins=auto,stats=off",
          "LINDBERGH_VULKAN_CACHE":remote+"/pipeline-cache.bin","LINDBERGH_NVRAM":remote+"/nvram.bin",
          "LINDBERGH_VULKAN_SHADERS":remote+"/game.lvsp","LINDBERGH_VULKAN_FIXED_SHADERS":remote+"/fixed.lvsp",
          "LINDBERGH_SHOT":remote+"/capture.ppm","LINDBERGH_SHOT_FRAME":str(args.frames-1),

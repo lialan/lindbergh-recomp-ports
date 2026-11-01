@@ -28,7 +28,7 @@ export VK_DRIVER_FILES=$(ls /usr/share/vulkan/icd.d/lvp_icd*.json | head -1) LIN
 export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy LINDBERGH_MUTE=1 LINDBERGH_GL_THREAD=1 \
     LINDBERGH_HIDDEN=1 LINDBERGH_WINDOW=640x480 LINDBERGH_EXIT_AFTER=$FRAMES LINDBERGH_AUTOSTART=8 \
     LINDBERGH_SHOT_FROM_GUN=1 LINDBERGH_VULKAN_FAKE_YAW=0 LINDBERGH_VULKAN_FAKE_GUN=1 \
-    LINDBERGH_XR_SET="width=1024,resolution=1024,dual=off,scale=1,screen=3,aim=15,hand=right,laser=laser,sight=none,crosshair=on,gun=on,hud_pitch=0,coins=auto,fps=off" \
+    LINDBERGH_XR_SET="width=1024,resolution=1024,dual=off,scale=1,screen=3,aim=15,hand=right,laser=laser,sight=none,crosshair=on,gun=on,hud_pitch=0,coins=auto,stats=off" \
     LINDBERGH_VULKAN_CACHE=$R/pipeline-cache.bin LINDBERGH_NVRAM=$R/nvram.bin \
     LINDBERGH_VULKAN_SHADERS=$B/inputs/game.lvsp LINDBERGH_VULKAN_FIXED_SHADERS=$FIXED \
     LINDBERGH_SHOT=$R/capture.ppm LINDBERGH_SHOT_FRAME=$((FRAMES - 1)) \
