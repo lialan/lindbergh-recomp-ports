@@ -34,6 +34,8 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy LINDBERGH_MUTE=1 LINDBERGH_GL
     LINDBERGH_SHOT=$R/capture.ppm LINDBERGH_SHOT_FRAME=$((FRAMES - 1)) \
     LINDBERGH_FRAME_TIMINGS=$R/frames.csv LINDBERGH_TIMING_FROM=60 LINDBERGH_TIMING_TO=$((FRAMES - 2))
 [ ! -f "$B/inputs/pipelines.lvpr" ] || export LINDBERGH_VULKAN_RECIPES_SEED=$B/inputs/pipelines.lvpr
+# CACHE_SEED=<driver cache>: start from it, as a packaged vulkan/pipelines.bin does
+[ -z "${CACHE_SEED:-}" ] || export LINDBERGH_VULKAN_CACHE_SEED=$CACHE_SEED
 ulimit -s 262144 2>/dev/null || ulimit -s unlimited 2>/dev/null || true
 . /src/games/$GAME/game.conf
 cd "/game/$(dirname "$ELF")"

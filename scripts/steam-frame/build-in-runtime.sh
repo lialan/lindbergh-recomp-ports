@@ -23,6 +23,8 @@ cp "$B/inputs/game.lvsp" "$P/vulkan/game.lvsp"
 if [ -f "$B/inputs/fixed.lvsp" ]; then cp "$B/inputs/fixed.lvsp" "$P/vulkan/fixed.lvsp"
 else cp "$B/cmake/lindberghrecomp/src/renderer/vulkan/fixed-pack/fixed.lvsp" "$P/vulkan/fixed.lvsp"; fi
 [ ! -f "$B/inputs/pipelines.lvpr" ] || cp "$B/inputs/pipelines.lvpr" "$P/vulkan/pipelines.lvpr"
+# the driver pipeline cache harvested on a Frame: used where the GPU and driver match
+[ ! -f "$B/inputs/pipelines.bin" ] || cp "$B/inputs/pipelines.bin" "$P/vulkan/pipelines.bin"
 # SDL2, OpenAL Soft and the OpenXR loader from the runtime: used when the
 # game is started outside the Steam Linux Runtime container. The Vulkan
 # loader and driver always come from the system.

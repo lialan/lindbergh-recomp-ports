@@ -5,7 +5,14 @@
 # launcher. No game data goes in it.
 #
 #   scripts/build-steam-frame.sh <game> --shader-pack <game.lvsp> \
-#       [--pipeline-recipes <pipelines.lvpr>] [--gl-headers-root <dir with GL/gl.h, GL/glext.h>]
+#       [--pipeline-recipes <pipelines.lvpr>] [--pipeline-cache <pipelines.bin>] \
+#       [--gl-headers-root <dir with GL/gl.h, GL/glext.h>]
+#
+# The pipeline seed (portable recipes) and the Frame's driver pipeline cache
+# default to what scripts/harvest-pipelines.sh pulled off a headset:
+# $LINDBERGH_SEEDS/<game>/pipelines.lvpr and .../frame/pipelines.bin
+# (LINDBERGH_SEEDS defaults to build-seeds/). With both, a fresh install
+# compiles nothing before play on a Frame with the same driver.
 #
 #   -> build-frame/<game>/dist/<APK name>-steamframe-arm64.tar.gz
 #
@@ -21,17 +28,23 @@ die() { echo "error: $*" >&2; exit 1; }
 ID=${1:-}
 [ -n "$ID" ] && [ -f "$ROOT/games/$ID/game.conf" ] || die "usage: $0 <game> --shader-pack <game.lvsp> [--pipeline-recipes <file>] [--gl-headers-root <dir>]"
 shift
-PACK= RECIPES= GLH=
+PACK= RECIPES= CACHE= GLH=
 while [ $# -gt 0 ]; do
     case $1 in
         --shader-pack) PACK=$2; shift 2 ;;
         --pipeline-recipes) RECIPES=$2; shift 2 ;;
+        --pipeline-cache) CACHE=$2; shift 2 ;;
         --gl-headers-root) GLH=$2; shift 2 ;;
         *) die "unknown argument $1" ;;
     esac
 done
 [ -n "$PACK" ] && [ -f "$PACK" ] || die "--shader-pack <game.lvsp> is required (the game's offline Vulkan shader archive)"
+SEEDS=${LINDBERGH_SEEDS:-$ROOT/build-seeds}/$ID
+[ -n "$RECIPES" ] || [ ! -f "$SEEDS/pipelines.lvpr" ] || RECIPES=$SEEDS/pipelines.lvpr
+[ -n "$CACHE" ] || [ ! -f "$SEEDS/frame/pipelines.bin" ] || CACHE=$SEEDS/frame/pipelines.bin
 [ -z "$RECIPES" ] || [ -f "$RECIPES" ] || die "no such pipeline recipes file: $RECIPES"
+[ -z "$CACHE" ] || [ -f "$CACHE" ] || die "no such pipeline cache file: $CACHE"
+echo "pipeline seed: ${RECIPES:-none}; driver cache: ${CACHE:-none}"
 [ -f "$ROOT/games/$ID/generated/recomp_imports.h" ] || die "no lifted code in games/$ID/generated (scripts/build-macos.sh $ID <game folder> makes it)"
 # The guest GL ABI headers: declarations only, never linked. Default: the
 # Mesa headers quest/build_vulkan.py is given, else the SDK's own.
@@ -47,6 +60,8 @@ mkdir -p "$OUT/inputs"
 cp "$PACK" "$OUT/inputs/game.lvsp"
 rm -f "$OUT/inputs/pipelines.lvpr"
 [ -z "$RECIPES" ] || cp "$RECIPES" "$OUT/inputs/pipelines.lvpr"
+rm -f "$OUT/inputs/pipelines.bin"
+[ -z "$CACHE" ] || cp "$CACHE" "$OUT/inputs/pipelines.bin"
 # The fixed-function shader archive, built here when this machine has the
 # shader tools: the same glslang/spirv-cross the Quest packs are made with
 # (the runtime SDK's 2021 spirv-cross gives a different, untested archive).
