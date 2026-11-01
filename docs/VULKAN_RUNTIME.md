@@ -262,3 +262,45 @@ maps across asynchronous two-eye draws. Mac validation/core tests and Android
 game/APK builds pass. The latest bounded game launch produced no native log,
 so live world-pbuffer activation, visual quality and combat performance remain
 open. See VULKAN_PERFORMANCE.md for evidence and measurement requirements.
+
+## Shared controller and cabinet input
+
+GL and native Vulkan now use xr_actions.c for the established Touch bindings,
+active action values, aim spaces and haptics. xr_controls.c holds hand switching,
+120 ms grip-reload pulses, offscreen reload, player-specific buttons, Start,
+automatic credits and delayed P2 join. GL keeps its existing panel/recoil
+callback ordering. Cabinet button definitions live in cabinet_buttons.h.
+
+The renderer-independent ControllerInput class maps anchored controller poses
+through shared screen/HUD ray math and publishes a snapshot for the game
+thread. Short trigger pulses and coin events survive between reads; focus or
+tracking loss clears held input and shot rays. This adds no GPU work or wait.
+Native Vulkan provides stereo_gun_ray rather than the former disabled bridge,
+so HOTD4 Special's existing per-player shot hook can use the controller ray.
+Its input coordinates use the profile's 1024x768 cabinet range, independently
+of the render target resolution. The native OpenXR host reanchors on focus,
+matching the GL host's policy.
+
+Source-owned controls/action tests cover binding initialization and cleanup,
+inactive/invalid poses, focus loss, haptics, reload timing, hand selection,
+separate player actions and credit-before-Start ordering. Mac core tests also
+cover head-locked aim and game-thread delivery. The same core tests pass on
+Quest's Adreno 740 in quest-stereo-core-20261101-012529 (no XR session or
+physical-controller validation). Full Android GL game linking and native
+Vulkan APK packaging pass.
+
+For device-free integration, set LINDBERGH_VULKAN_FAKE_YAW=0 and
+LINDBERGH_VULKAN_FAKE_GUN=1 or 2. The latter drives the same pose/cabinet path;
+it is disabled by default. On Mac, LINDBERGH_SHOT_FROM_GUN=1 explicitly enables
+HOTD4 Special's shot-ray game hook. Two 3600-frame simulated-controller runs
+retain world/HUD output and show both players joined. The ray-enabled repeat
+logs successful GetTarget calls with a native ray and no validation errors.
+Artifacts remain under build-mac-vulkan-game/controller-ray-dual-3600.log and
+build-vulkan-reference/hotd4sp-controller-ray-dual-3600.ppm. These are local
+integration checks, not Quest combat or precision-aim acceptance.
+
+Native gun/laser models, the settings/capture overlay, HUD clipping, path-box
+and depth-aware aiming, and special menu/CQC/horizon policies remain open.
+The current non-HUD aim path uses the configured aim distance until depth
+sampling is ported. Actual runtime/controller binding, world foveation,
+visual quality and sustained combat frame times still require Quest testing.

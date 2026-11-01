@@ -171,3 +171,14 @@ The density attachment retains the required DONT_CARE store operation from
 Verify the actual combat world pass and preserve image quality in matched
 OpenGL/Vulkan device comparisons. Final-swapchain foveation alone is not a
 performance acceptance result.
+
+## Input integration validation boundary
+
+The shared control policy and native pose/cabinet snapshot path now compile
+and pass CPU/core tests on Mac and Quest. Simulated dual-controller Mac combat
+runs exercise cabinet input and the game shot-ray bridge. They run with
+validation and diagnostic logging; their FPS logs are not a performance
+comparison. The Android GL game still links after sharing its controls and
+bindings. No claim of actual Touch-controller gameplay, input latency or
+Quest combat performance follows from these tests. Native overlays and
+additional aiming policies are still required before full gameplay acceptance.
