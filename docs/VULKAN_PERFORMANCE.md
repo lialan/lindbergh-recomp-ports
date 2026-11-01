@@ -714,3 +714,30 @@ stays zero. This explains why the unused/black drawable-1 probe could not
 locate the visible image. Further diagnosis should inspect those HUD/movie
 shaders, uploaded textures and depth/composition state rather than treating
 the frame as a failed 3D world pass. It is not a combat-performance sample.
+
+## Black movie interval fixed locally
+
+The captured black interval is resolved by the shared full-screen HUD depth
+mode described in the runtime document. The movie's uploaded luma/chroma planes
+contained data; flattening its depth with the backing layers hid the picture.
+The final correction retains full-eye image coverage and HUD layer depth,
+with ordinary world/fade paths unchanged. Source-owned Mac GPU tests cover
+movie corners, backing rejection and foreground text in both eyes; stale
+offline packs are rejected and the new raster flag round-trips through recipes.
+
+The rebuilt game pack preserves all 203 unique source/binding lookup variants.
+All 203 vertex modules are byte-identical to the previous optimized modules
+when the new specialization is false, after specialization freezing and
+`spirv-opt -O`. This supports unchanged world shader work; it is not a hardware
+FPS measurement. The cold actual-game Mac run completes 3601 frames and its
+previously black sampled movie frames now show the picture and prompts, followed
+by combat at 3600. No Vulkan validation errors were reported. Cold pipelines
+were deliberately rebuilt after shader identities changed; the 1801-frame warm
+repeat prepares 259 pipelines and reports zero first uses. Logs and captures are
+under `build-mac-vulkan-offscreen/full-hud-game-3600` and `full-hud-warm-1800`.
+
+The Quest Vulkan APK is rebuilt with that updated pack and 259-entry seed.
+Its package contents are verified locally, and its dynamic imports contain no
+host GL/EGL/SDL_GL entry points. It has not been installed or tested on the
+headset under the user's local-only instruction. No new Quest/OpenXR combat FPS
+claim follows; the earlier 59.55 FPS offscreen control predates these changes.

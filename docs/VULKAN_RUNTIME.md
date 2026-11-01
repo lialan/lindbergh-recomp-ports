@@ -797,3 +797,46 @@ under `build-vulkan-android-core/quest-hud-array-projection-current` and
 shared lock without APK/UI changes. Mac/Android GL builds and the Vulkan APK
 build pass. These fixtures establish the corrected classification, not complete
 HUD/gameplay parity or focused Quest performance.
+
+## Full-screen perspective HUD/movie depth
+
+The locally reproduced black interval was a rendering defect: frame-1800
+Y/Cb/Cr CPU texture shadows contained image data, but the movie and its black
+backing were classified as full-screen fills and flattened to the same
+foreground depth. A diagnostic that retained ordinary HUD depth made the movie
+and prompts visible, but shrank the image onto the finite HUD plane.
+
+The final shared backend preserves both requirements. Perspective full-screen
+HUD layers on frames without world draws (and movie layers over a world) use
+the HUD transform for Z/W. Vertex specialization 5, `RasterState::full_hud`,
+restores original guest NDC XY by scaling guest XY by corrected-W/guest-W.
+The image still covers the eye, while black backing, movie and foreground
+text retain their depth ordering. Ordinary affine fills/fades retain their
+existing foreground behavior. This introduces no game-specific shader patches.
+
+The flag participates in pipeline keys and portable recipes; tests verify its
+serialization and prewarming. A vertex-module capability check refuses this
+mode with an old offline wrapper instead of silently dropping the correction.
+Rebuild game/fixed packs after updating `compile_shaders.py`. Inactive
+specialization eliminates the correction for normal world shaders: all 203
+unique captured vertex programs produce byte-identical optimized modules to
+the previous pack after freezing specialization 5 false and running `spirv-opt
+-O`. Evidence is `build-vulkan-shaders-hotd4sp-full-hud/all-world-specialization-check`.
+This is offline code equivalence, not measured driver ISA or headset timing.
+
+Mac validation fixtures check full-eye corner coverage, a later black backing
+remaining behind the movie, foreground HUD text, both eyes, cached recipe
+restoration and stale-wrapper rejection. Android core and real guest-ABI tests
+cross-build; no headset was accessed for this milestone. The actual Mac game
+completes 3601 frames without validation errors, with visible movies at the
+previously black sampled 1800/2400/3000 frames and combat at 3600 in retained
+captures. Artifact directory: `build-mac-vulkan-offscreen/full-hud-game-3600`.
+The warm 1801-frame repeat prepares all 259 captured pipelines before use and
+reports zero first-use pipelines (`full-hud-warm-1800`).
+
+The refreshed APK builds locally from
+`build-vulkan-shaders-hotd4sp-full-hud/hotd4sp.lvsp` and the new run's
+`pipelines.bin.recipes`; archive inspection verifies the exact game pack,
+seed and stripped native library. It is not installed or accepted on Quest.
+Focused OpenXR, physical input, sustained combat/thermal performance and
+complete campaign/material/UI coverage remain open.
