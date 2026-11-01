@@ -772,3 +772,28 @@ Retained device evidence is under
 cleaned their source-owned fixtures under the shared lock without APK/UI
 changes. Mac CTest runs both suites with no validation errors. These are
 resource-lifetime/ABI correctness tests, not headset/controller/combat acceptance.
+
+## Perspective HUD array bounds
+
+HOTD4 Special identifies a perspective camera with x lens 1.8107 as HUD.
+Vulkan's small-array bounds path previously treated those positions as 2D
+with clip W=1. A panel spanning only +/-0.294 NDC could consequently be
+classified as a full-screen fill and skip the HUD screen-plane projection.
+The real guest-ABI GPU fixture reproduces that failure before the fix.
+
+Small array/immediate bounds and copied-picture bounds now use the shared
+`lg_stereo_project_xy` homogeneous transform, including position W, clip W and
+Z contributions. Behind-camera, zero-W and nonfinite positions reject the
+rectangle without producing invalid bounds. OpenGL's immediate aim-box
+tracker uses the same helper for its existing projection calculation.
+World geometry does not enter this bounded HUD path; no driver calls,
+GPU waits, uploads or submissions were added.
+
+Mac KosmicKrisp validation and Quest Adreno tests verify the perspective panel
+in both eyes through the real guest ABI, plus homogeneous-W/translation and
+invalid-coordinate cases in the shared projection tests. Quest evidence is
+under `build-vulkan-android-core/quest-hud-array-projection-current` and
+`quest-hud-projection-core-current`; both fixture sessions cleaned up under the
+shared lock without APK/UI changes. Mac/Android GL builds and the Vulkan APK
+build pass. These fixtures establish the corrected classification, not complete
+HUD/gameplay parity or focused Quest performance.

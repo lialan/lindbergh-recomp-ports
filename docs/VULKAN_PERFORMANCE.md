@@ -670,3 +670,25 @@ counts. A real guest-ABI fixture also passes target destruction/recreation,
 both-eye color captures and unfinished shutdown on both platforms. Normal
 Mac game and Quest Vulkan APK builds pass. This closes an abort/lifetime gap;
 it provides no new FPS result or headset/compositor acceptance evidence.
+
+## Perspective HUD classification regression
+
+The real guest-ABI fixture reproduces a small perspective HUD array being
+classified as a full-screen fill before clip-W division was implemented.
+After the shared homogeneous projection fix, the same both-eye pixel checks
+pass on Mac KosmicKrisp and Quest Adreno. Shared projection tests cover 4D
+vertex W, translation, behind-camera/zero-W and nonfinite input. Mac validation
+reports no errors; Mac/Android GL and Quest Vulkan APK builds pass. Small HUD
+draws remain bounded to 64 vertices, and the world geometry path is unchanged.
+This is a correctness fix, not a measured FPS improvement.
+
+The actual Mac offscreen game additionally completed 1801 and 3601 frames,
+with no validation errors or catalogue pipeline first uses. Captures and
+manifests are under `build-mac-vulkan-offscreen/hud-projection-game-{1800,3600}`.
+The 1200 capture shows combat, and both eyes show combat again at 3600. The
+sampled 1800/2400/3000 frames are black behind the native gun overlay, around
+scene cleanup/reentry. Recovery does not establish whether that interval is
+expected game state, missing movie output or a renderer gap; diagnosis remains
+open. These captures therefore do not establish complete visual parity or
+sustained combat performance. Focused Quest rendering/controller acceptance
+and the equal-quality OpenGL performance comparison remain required.
