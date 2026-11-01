@@ -30,6 +30,9 @@ for l in libSDL2-2.0.so.0 libopenal.so.1 libopenxr_loader.so.1 libjsoncpp.so.26;
     f=$(ldd "$P/$GAME" | awk -v l="$l" '$1==l{print $3}')
     [ -n "$f" ] && cp -L "$f" "$P/lib/$l"
 done
+# the runtime's SDL2 is sdl2-compat: it loads SDL3 at run time
+f=$(ldconfig -p | awk '$1=="libSDL3.so.0"{print $NF; exit}')
+[ -n "$f" ] && cp -L "$f" "$P/lib/libSDL3.so.0"
 sed -e "s|@GAME@|$GAME|g" -e "s|@TITLE@|$TITLE|g" -e "s|@ELF@|$ELF|g" \
     /src/scripts/steam-frame/launch.sh.in > "$P/launch.sh"
 chmod +x "$P/launch.sh"
