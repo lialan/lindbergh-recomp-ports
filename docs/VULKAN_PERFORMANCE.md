@@ -696,11 +696,13 @@ and the equal-quality OpenGL performance comparison remain required.
 Subsequent Mac-only controls narrow the black-interval investigation. The
 existing `LINDBERGH_GOD=1` hook was confirmed active, but frame 1800 remained
 black behind the overlay (`hud-god-control-1800`). Capturing guest drawable 1
-instead of final output shows its world pbuffer is already black in both eyes
-at 1800 (`hud-world-target-control-1800`), whereas its 1200 capture contains
-game pixels. Both 1801-frame controls exit successfully without validation
-errors. Invulnerability did not prevent the interval, and the world image is
-absent before final composition; game/movie state and rendering before that
-point remain to be traced. This does not establish an expected transition or
-complete visual correctness. Per user instruction, further work is local/Mac
+instead of final output shows that pbuffer is entirely black in both eyes
+at 1800 (`hud-world-target-control-1800`), but it is also entirely black at
+1200 when final output shows combat. Drawable 1 is therefore not a proven
+source of the visible world in this scenario; this probe cannot locate where
+the final output becomes black. Both 1801-frame controls exit successfully
+without validation errors. Invulnerability did not prevent the interval;
+active draw targets, movie passes and game state remain to be traced. This
+does not establish an expected transition or complete visual correctness.
+Per user instruction, further work is local/Mac
 only until headset testing is requested again.
