@@ -18,8 +18,13 @@ arm64 SDK natively), the lifted game in `games/hotd4/generated`
 game's offline shader archive, the same one the Quest Vulkan build bundles
 (`quest/build_vulkan.py --shader-pack`; see [VULKAN.md](VULKAN.md)).
 
+Rebuild the shader archive whenever the converter changes, from the OpenGL
+capture's `programs.jsonl`, so it matches the code:
+
 ```sh
-scripts/build-steam-frame.sh hotd4 --shader-pack hotd4.lvsp [--pipeline-recipes pipelines.lvpr]
+python3 lindberghrecomp/tools/vulkan/compile_shaders.py <capture>/programs.jsonl build-frame/hotd4/shaders
+python3 lindberghrecomp/tools/vulkan/pack_shaders.py build-frame/hotd4/shaders build-frame/hotd4/hotd4.lvsp
+scripts/build-steam-frame.sh hotd4 --shader-pack build-frame/hotd4/hotd4.lvsp [--pipeline-recipes pipelines.lvpr]
 # -> build-frame/hotd4/dist/HouseOfTheDead4VR-steamframe-arm64.tar.gz
 ```
 
