@@ -840,3 +840,25 @@ The refreshed APK builds locally from
 seed and stripped native library. It is not installed or accepted on Quest.
 Focused OpenXR, physical input, sustained combat/thermal performance and
 complete campaign/material/UI coverage remain open.
+
+## Ghost Squad Evolution on Vulkan (Mac)
+
+GSE runs through native Vulkan on KosmicKrisp: 7200-frame runs reach combat
+with no validation errors, and the world, glow chain, menu models and HUD
+match the OpenGL reference capture. What it needed (all shared runtime):
+framebuffer objects (drawables plus copy-on-sample into attached textures),
+rectangle and cube textures, GL_COMBINE with crossbar, fixed-function
+lighting, generated stages for single-stage programs, and NV attribute
+aliasing in the converter.
+
+GSE's shader pack is built from the OpenGL capture plus a Vulkan harvest:
+`LINDBERGH_VULKAN_SHADER_HARVEST=<dir>` records every program missing from
+the pack as a `compile_shaders.py` manifest (content-named, so runs append)
+and skips their draws. The OpenGL capture misses rectangle programs and
+single-stage programs, so a harvest pass is required; repeat runs until a
+pass harvests nothing. Run HOTD4 from its `elf` directory: its vertex shaders
+include library files read relative to the working directory.
+
+Mac-only: KosmicKrisp cannot build layered Metal pipelines for points or for
+the triangle fans it emulates. On Apple GPUs fans are drawn as triangle lists
+and points (GSE's particles) are skipped; Quest draws both natively.
