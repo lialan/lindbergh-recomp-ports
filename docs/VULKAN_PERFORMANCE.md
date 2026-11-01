@@ -103,9 +103,34 @@ app-UID ELF/config hash check before launch, and uses the Activity's
 `lindbergh.require_private_game` diagnostic guard. The guard checks the ELF,
 config and filesystem from the real app process and refuses shared-path
 fallback. The collector additionally requires fresh private-path evidence.
-The rebuilt APK compiles; successful private staging and focused rendering
-still require a new coordinated device run. This is a correctness diagnostic,
-not an uninstrumented performance benchmark.
+Shell-owned external copies were confirmed inaccessible even through run-as.
+The diagnostic now streams a read-only archive of the source into a unique
+app-internal directory as the app UID. Java verifies that restricted internal
+path and its files before SDL loads; the native entry receives it explicitly
+and disables shared-path fallback. A 95-second coordinated run verified both
+the app-UID hashes and actual app-process/private native selection, loaded the
+intended environment, and cleaned up without changing the original GL APK or
+the recorded external-file fingerprints. It did not reach a renderable XR
+session. This is a correctness diagnostic, not an uninstrumented performance
+benchmark.
+
+Shared `host_sdl.c` also set `SDL_HINT_ANDROID_BLOCK_ON_PAUSE` after `SDL_Init`.
+SDL 2.32.10 selects its blocking/nonblocking Android event pump when creating
+the video device; the late hint could not change that choice. The hint is now
+set before initialization for both renderers, preserving the existing intended
+policy. Android Vulkan APK and GL native builds pass. OpenXR session state
+still controls whether XR frames may render; this does not bypass system UI
+or tracking requirements.
+
+With the earlier hint, the next bounded run advanced to game frame 3502 rather
+than stalling before the first present. It remained in OpenXR IDLE; the retained
+headset image showed the system's "Finding position in room" tracking dialog.
+Do not interpret background game progress or configured density-map attachments
+as acquired-image/display evidence. This run's logcat marker was lost during
+collector attachment, so its collector verdict failed despite private-path
+evidence in the game log. The runner now waits for its marker before launching
+and skips nonexistent remote artifacts instead of retaining `cat` error text
+as CSV/image/binary files. The retry after that collector change is pending.
 
 The native Quest game host/OpenXR integration is still incomplete. The shared
 Android game library and isolated APK build now link with no GL/EGL imports;

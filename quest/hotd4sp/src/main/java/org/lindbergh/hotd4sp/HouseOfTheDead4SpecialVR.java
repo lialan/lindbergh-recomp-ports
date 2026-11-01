@@ -54,11 +54,22 @@ public class HouseOfTheDead4SpecialVR extends SDLActivity {
         return new String[] { "SDL2", "openal", "openxr_loader", "main" };
     }
 
+    @Override
+    protected String[] getArguments() {
+        String path = getIntent().getBooleanExtra("lindbergh.require_private_game", false) ?
+                getIntent().getStringExtra("lindbergh.private_game") : null;
+        return path == null ? super.getArguments() : new String[] { "--private-game", path };
+    }
+
     private String checkGame() {
         File own = getExternalFilesDir(null);
         // Diagnostics must never silently run against the player's shared tree.
         // Check in the real app process: shell-readable storage is insufficient.
         if (getIntent().getBooleanExtra("lindbergh.require_private_game", false)) {
+            String path = getIntent().getStringExtra("lindbergh.private_game");
+            if (path == null || !path.matches(java.util.regex.Pattern.quote(getFilesDir().getAbsolutePath()) +
+                    "/\\.codex-xr-[0-9a-f]{32}")) return "Invalid private diagnostic path";
+            own = new File(path);
             File elf = own == null ? null : new File(own, "elf/hod4M.elf");
             File env = own == null ? null : new File(own, "elf/env.txt");
             File fs = own == null ? null : new File(own, "fs");

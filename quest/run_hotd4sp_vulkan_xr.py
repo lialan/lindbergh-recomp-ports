@@ -2,7 +2,7 @@
 """Bounded HOTD4SP Vulkan/OpenXR APK check; run ENTIRE script under quest3-lock.
 
 Only updates/stops the experimental .vulkan package. Copies game assets into
-its own external directory, restores previous folders/env/logs, streams fresh
+a unique app-internal directory, removes that copy after use, streams fresh
 all-buffer logcat and retains session evidence. No Guardian/tracking changes.
 """
 import argparse
@@ -37,10 +37,10 @@ def main():
     adb=str(Path.home()/"Library/Android/sdk/platform-tools/adb")
     own="/sdcard/Android/data/"+PACKAGE+"/files"
     source="/sdcard/HouseOfTheDead4Special"
-    token=uuid.uuid4().hex;private=own+"/.codex-xr-"+token
+    token=uuid.uuid4().hex;private=None
     report={"serial":SERIAL,"token":token,"apk_sha256":hashlib.sha256(args.apk.read_bytes()).hexdigest(),
             "scope":"Actual game/OpenXR session; physical aiming/display/combat acceptance remains separate"}
-    moved=[];created=[];cleanup=[];proximity=False;launched=False;stream=None;installed=False;workspace_created=False
+    cleanup=[];proximity=False;launched=False;stream=None;installed=False;workspace_created=False
     def command(*argv,check=True,timeout=30):
         return subprocess.run([adb,"-s",SERIAL,*map(str,argv)],capture_output=True,check=check,timeout=timeout)
     def shell(*argv,**kwargs):return command("shell",shlex.join(map(str,argv)),**kwargs)
@@ -52,9 +52,6 @@ def main():
         return {p[8:]:shell("sha256sum",p[8:]).stdout.decode().split()[0] for p in paths if p.startswith("package:")}
     def exists(path):
         return shell("ls","-d",path,check=False).returncode==0
-    def preserve(name):
-        path=own+"/"+name
-        if exists(path):shell("mv",path,private+"/original-"+name);moved.append(name)
     def original_files():
         result={}
         for name in ("env.txt","hotd4sp.log","HOW-TO-ADD-THE-GAME.txt","elf/hod4M.elf","fs"):
@@ -80,14 +77,16 @@ def main():
         save("install.txt",command("install","-r",args.apk.resolve(),timeout=90));installed=True
         report["experimental_apk_after_install"]=apk_hashes(PACKAGE)
         if report["apk_sha256"] not in report["experimental_apk_after_install"].values():raise RuntimeError("installed APK hash mismatch")
-        # Stop only our experimental app before relocating its existing files.
+        # The UUID workspace is app-owned internal storage. External storage
+        # staged by shell is inaccessible to the APK on current Quest firmware.
         shell("am","force-stop",PACKAGE)
-        shell("mkdir","-p",private)
+        app_home=shell("run-as",PACKAGE,"pwd").stdout.decode().strip()
+        private=app_home+"/files/.codex-xr-"+token
+        report["private_game_directory"]=private
+        shell("run-as",PACKAGE,"mkdir","-p",private)
         workspace_created=True
-        for name in ("elf","fs","env.txt","hotd4sp.log","HOW-TO-ADD-THE-GAME.txt"):preserve(name)
-        for name in ("elf","fs"):
-            # Record ownership before copying so partial copies are cleaned too.
-            created.append(name);shell("cp","-R",source+"/"+name,own+"/",timeout=180)
+        transfer=shlex.join(["tar","-C",source,"-cf","-","elf","fs"])+" | "+shlex.join(["run-as",PACKAGE,"tar","-C",private,"-xf","-"])
+        save("stage.txt",command("shell",transfer,timeout=180))
         env={"LINDBERGH_AUTOSTART":"8","LINDBERGH_AUTOGUN":"2","LINDBERGH_MUTE":"1","LINDBERGH_GL_THREAD":"1",
              "LINDBERGH_EXIT_AFTER":"3600","LINDBERGH_XR_SET":"width=2064,resolution=2280,refresh=120,scale=1,screen=3,aim=15,dual=on,fps=on",
              "LINDBERGH_VULKAN_CACHE":private+"/pipelines.bin","LINDBERGH_NVRAM":private+"/nvram.bin",
@@ -97,21 +96,30 @@ def main():
              "LINDBERGH_SHOT":private+"/capture.ppm","LINDBERGH_SHOT_FRAME":"120"}
         report["environment"]=env
         envfile=out/"env.txt";envfile.write_text("\n".join(k+"="+v for k,v in env.items())+"\n")
-        created.append("env.txt");command("push",envfile,own+"/env.txt");command("push",envfile,own+"/elf/env.txt")
-        # Fail before Activity launch when the app UID cannot read shell-staged
+        for destination in (private+"/env.txt",private+"/elf/env.txt"):
+            with envfile.open("rb") as config:
+                subprocess.run([adb,"-s",SERIAL,"shell","run-as "+PACKAGE+" sh -c "+shlex.quote("cat > "+shlex.quote(destination))],stdin=config,capture_output=True,check=True,timeout=30)
+        # Fail before Activity launch when the app UID cannot read staged
         # files. The Activity independently enforces this in its actual context.
-        probe=save("app-uid-access.txt",shell("run-as",PACKAGE,"sha256sum",own+"/elf/hod4M.elf",own+"/elf/env.txt",check=False))
+        probe=save("app-uid-access.txt",shell("run-as",PACKAGE,"sha256sum",private+"/elf/hod4M.elf",private+"/elf/env.txt",check=False))
         hashes=[line.split()[0] for line in probe.stdout.decode().splitlines() if line.split()]
         if probe.returncode or hashes != [expected,hashlib.sha256(envfile.read_bytes()).hexdigest()]:
             raise RuntimeError("app UID cannot verify staged ELF/env; refusing shared-path fallback")
         report["device_time"]=shell("date").stdout.decode().strip()
         logfile=(out/"logcat-all.txt").open("wb")
         stream=subprocess.Popen([adb,"-s",SERIAL,"logcat","-b","all","-v","threadtime","-T","1"],stdout=logfile,stderr=subprocess.STDOUT)
-        command("shell","log","-t","LindberghXRSession","START "+token)
+        # logcat attaches asynchronously. Wait until the marker is actually
+        # retained before launch, rather than losing it to the -T 1 race.
+        for attempt in range(20):
+            shell("log","-t","LindberghXRSession","START "+token)
+            time.sleep(.2)
+            if "START "+token in (out/"logcat-all.txt").read_text(errors="replace"):break
+        else:raise RuntimeError("fresh logcat marker was not observed; refusing untracked launch")
         proximity=True;save("proximity-close.txt",shell("am","broadcast","-a","com.oculus.vrpowermanager.prox_close"))
         shell("input","keyevent","KEYCODE_WAKEUP")
-        created.extend(["hotd4sp.log","HOW-TO-ADD-THE-GAME.txt"])
-        launched=True;save("launch.txt",shell("am","start","-W","-n",PACKAGE+"/"+ACTIVITY,"--ez","lindbergh.require_private_game","true"))
+        # Observe process/session state ourselves. am start -W may wait on
+        # system focus/Activity transitions instead of the requested app.
+        launched=True;save("launch.txt",shell("am","start","-n",PACKAGE+"/"+ACTIVITY,"--ez","lindbergh.require_private_game","true","--es","lindbergh.private_game",private))
         start=time.monotonic();pid=""
         while time.monotonic()-start<args.seconds:
             current=shell("pidof",PACKAGE,check=False).stdout.decode().strip()
@@ -121,9 +129,14 @@ def main():
         save("process.txt",shell("ps","-A","-o","PID,NAME,ARGS",check=False))
         save("activity.txt",shell("dumpsys","activity","activities",check=False))
         save("exit-info.txt",shell("dumpsys","activity","exit-info",PACKAGE,check=False))
-        command("pull",own+"/hotd4sp.log",out/"game.log",check=False)
-        for name in ("capture.ppm","frames.csv","submissions.csv","pipelines.bin.recipes"):
-            command("pull",private+"/"+name,out/name,check=False)
+        for name in ("hotd4sp.log","capture.ppm","frames.csv","submissions.csv","pipelines.bin.recipes"):
+            # exec-out can return zero for a remote cat error; do not save
+            # error text as an image, CSV or binary pipeline recipe file.
+            if shell("run-as",PACKAGE,"test","-f",private+"/"+name,check=False).returncode:
+                report.setdefault("missing_artifacts",[]).append(name)
+                continue
+            result=command("exec-out","run-as",PACKAGE,"cat",private+"/"+name,check=False)
+            if result.returncode==0:(out/("game.log" if name=="hotd4sp.log" else name)).write_bytes(result.stdout)
         with (out/"screen.png").open("wb") as picture:
             subprocess.run([adb,"-s",SERIAL,"exec-out","screencap","-p"],stdout=picture,check=True,timeout=20)
     except Exception as error:
@@ -140,13 +153,10 @@ def main():
             try:stream.wait(timeout=10)
             except subprocess.TimeoutExpired:stream.kill();stream.wait()
             logfile.close()
-        # Only the test's copied directories are removed; originals are moved
-        # back before the UUID workspace is deleted. Failed restoration retains
-        # all backups for recovery and is a failing test result.
+        # Delete only the unique internal workspace. Existing external game
+        # files are never relocated or selected by this diagnostic.
         try:
-            for name in created:shell("rm","-rf",own+"/"+name)
-            for name in moved:shell("mv",private+"/original-"+name,own+"/"+name)
-            if workspace_created and not cleanup:shell("rm","-rf",private)
+            if workspace_created and not cleanup:shell("run-as",PACKAGE,"rm","-rf",private)
         except Exception as error:cleanup.append("restore: "+repr(error))
         try:
             after=apk_hashes(ORIGINAL);report["original_apk_after"]=after
@@ -166,11 +176,15 @@ def main():
     lines=[line for line in fresh.splitlines() if pid and re.match(r"^\d\d-\d\d\s+\S+\s+"+re.escape(pid)+r"\s+",line)]
     (out/"logcat-pid.txt").write_text("\n".join(lines)+"\n")
     report["fresh_log_marker"]=bool(fresh)
-    expected_dir=own+"/elf"
+    expected_dir=private+"/elf"
     selected=[line.split("[android] game directory ",1)[1].strip() for line in lines if "[android] game directory " in line]
     normalize=lambda path:path.replace("/storage/emulated/0/","/sdcard/")
     report["private_game_selected"]=bool(selected) and all(normalize(path)==expected_dir for path in selected)
     report["app_private_game_verified"]=any("private game verified:" in line for line in lines)
+    report["xr_session_states"]=[int(match.group(1)) for line in lines
+                                  if (match:=re.search(r"\[vulkan-xr\] session state (\d+)",line))]
+    report["focused_observed"]=5 in report["xr_session_states"]
+    report["performance_accepted"]=False
     report["startup_evidence"]=[line for line in lines if any(k in line for k in ("vulkan-xr","vulkan-recipes","first game target","vulkan-offscreen","Fatal signal","AndroidRuntime"))]
     (out/"report.json").write_text(json.dumps(report,indent=2)+"\n")
     print("\n".join(report["startup_evidence"][-35:]),flush=True)
