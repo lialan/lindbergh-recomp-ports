@@ -299,8 +299,50 @@ Artifacts remain under build-mac-vulkan-game/controller-ray-dual-3600.log and
 build-vulkan-reference/hotd4sp-controller-ray-dual-3600.ppm. These are local
 integration checks, not Quest combat or precision-aim acceptance.
 
-Native gun/laser models, the settings/capture overlay, HUD clipping, path-box
+The settings/capture overlay, HUD clipping, path-box
 and depth-aware aiming, and special menu/CQC/horizon policies remain open.
 The current non-HUD aim path uses the configured aim distance until depth
 sampling is ported. Actual runtime/controller binding, world foveation,
 visual quality and sustained combat frame times still require Quest testing.
+
+## Native multiview gun, laser and sight overlay
+
+The source-owned gun mesh, pose, beam/spot billboards and sight glass geometry
+are shared with GL in xr_overlay_geometry.c. All nine model/sight mesh variants
+match the pre-extraction GL vertex bytes (reference commit 9cae523). GL uses
+the same functions and still links on Android. The Vulkan Overlay class keeps
+all nine meshes in GPU buffers and prepares its pipelines for every swapchain
+target before gameplay. Shaders are embedded build-time SPIR-V; no GL driver,
+translation layer or runtime shader compiler is introduced.
+
+Each primitive is drawn once with multiview. Per-eye billboard positions share
+one buffered vertex upload; gun transforms and uniforms use persistent frame
+storage. Guns retain the GL lighting, recoil and muzzle flashes; red/blue
+lasers preserve the game's alpha channel. Red-dot/holographic sights use the
+same glass geometry and a temporary depth mask, including independent eye
+visibility. Equal-depth viewport mapping preserves clip-plane behavior.
+
+Overlay drawing can adopt the final game render pass, retaining color without
+an extra tile load/store. It starts its own preserving pass only when the game
+has already closed that pass. The Mac 3600-frame diagnostic run retained nine
+meshes/three prepared targets. Its additional overlay-pass counter reached 17
+by frame 1200 and remained 17 through frame 3600; combat added none. This is
+mechanism validation, not a Quest FPS or bandwidth measurement.
+
+Source-owned GPU tests check stereo separation, laser alpha, a sight dot visible
+through one eye's glass only, and a laser collinear with one eye without losing
+the other eye's gradient. They verify 28 multiview draws instead of per-eye
+replay, zero additional passes when adopting the background, and stable mesh/
+target resources. Both ordinary and density-map render-pass cases pass on
+Adreno 740; evidence: quest-stereo-core-20261101-014705. Mac validation tests,
+mesh reference tests, Android GL linking and native APK packaging pass. The
+native Android library has no GL/EGL/SDL_GL imports.
+
+A 3600-frame Mac game repeat shows both guns, flashes and red/blue beams over
+combat without validation errors. Inspect
+build-vulkan-reference/hotd4sp-overlay-dual-3600.png and
+build-mac-vulkan-game/overlay-pass-3600.log. The image also exposes scene-edge
+gaps that still need diagnosis; it is not final visual acceptance. No headed
+Quest session was run for this overlay milestone. Settings/capture/FPS panels,
+remaining aiming/classification policies, color handling and actual headset
+combat quality/performance remain open.

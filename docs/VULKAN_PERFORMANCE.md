@@ -180,5 +180,22 @@ runs exercise cabinet input and the game shot-ray bridge. They run with
 validation and diagnostic logging; their FPS logs are not a performance
 comparison. The Android GL game still links after sharing its controls and
 bindings. No claim of actual Touch-controller gameplay, input latency or
-Quest combat performance follows from these tests. Native overlays and
+Quest combat performance follows from these tests. Native gun/laser/sight drawing is now implemented; settings panels and
 additional aiming policies are still required before full gameplay acceptance.
+
+## Overlay runtime-cost checks
+
+Gun/sight geometry is resident and all overlay pipelines are prepared before
+play. Billboard positions and small uniforms use the existing upload ring;
+there is no per-frame descriptor or mesh allocation, shader compilation or
+additional CPU/GPU wait. The renderer issues one multiview draw per primitive
+and adopts the final game pass where available. In the Mac diagnostic repeat,
+the additional overlay-pass count stopped increasing at 17 before frame 1200
+and remained unchanged to frame 3600. Cold startup/transition passes remain in
+the retained log rather than being hidden.
+
+Adreno pixel tests also pass inside a density-map render pass. These support
+the implementation's resource/submission policy, but do not establish full
+Quest game foveation, visual acceptance or combat frame pacing. The next live
+comparison must include the actual gun/laser settings and retain the earlier
+matched-quality, thermal, GPU/compositor and frame-time requirements.
