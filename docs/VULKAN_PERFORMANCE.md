@@ -59,7 +59,13 @@ The analyzer rejects missing frames, nonmonotonic clocks and differing A/B
 frame windows. Its default late threshold is a 60 Hz budget plus 0.5 ms; this
 is a diagnostic tolerance, not a declared hardware acceptance threshold. It
 also counts intervals above 25 ms / 33.333 ms and the longest late burst.
-A trace with good mean FPS can still expose a pacing regression. Optional
+A trace with good mean FPS can still expose a pacing regression. The report also
+includes adjacent interval changes, short/long alternation runs, the slowest
+rolling 60-interval window (for a 60 FPS target), and the ten worst intervals
+with frame numbers. `--pacing-swing-ms` defaults to 2 ms and controls the
+minimum short/long change counted in the alternation diagnostic; it is not an
+acceptance threshold. An 8.333/25 ms alternating sequence averages 60 FPS but
+is explicitly identified as uneven. Optional
 `--from-frame` / `--to-frame` selects an explicit analysis window from the raw
 capture and rejects uncaptured endpoints; retain the original trace. Use game
 events to separate combat from transitions rather than removing slow frames
@@ -199,3 +205,21 @@ the implementation's resource/submission policy, but do not establish full
 Quest game foveation, visual acceptance or combat frame pacing. The next live
 comparison must include the actual gun/laser settings and retain the earlier
 matched-quality, thermal, GPU/compositor and frame-time requirements.
+
+## CPU pacing diagnostic follow-up
+
+Re-analysis of the retained Mac runs (frames 3000–5599, no new device run)
+using the same 2 ms swing diagnostic reports:
+
+| Metric | OpenGL | Vulkan, warm inactive-state filtering |
+| --- | ---: | ---: |
+| Adjacent interval change p95 (ms) | 2.098 | 1.979 |
+| Alternating uneven pairs | 112 | 110 |
+| Longest alternating run (intervals) | 4 | 5 |
+| Slowest rolling 60-interval cadence (FPS) | 56.41 | 59.82 |
+
+The source trace contains one large OpenGL outlier; these single-run results
+do not establish a Vulkan speedup. Retained artifact:
+`build-vulkan-reference/hotd4sp-pacing-comparison.json`. This analysis adds no
+runtime instrumentation overhead. Quest GPU/compositor timing and sustained
+combat acceptance remain open.

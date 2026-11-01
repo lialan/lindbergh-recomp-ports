@@ -346,3 +346,13 @@ gaps that still need diagnosis; it is not final visual acceptance. No headed
 Quest session was run for this overlay milestone. Settings/capture/FPS panels,
 remaining aiming/classification policies, color handling and actual headset
 combat quality/performance remain open.
+
+### Shared settings panel policy foundation
+
+The settings item definitions, action cycles, reset confirmation and controller
+ray/panel intersection now live in `runtime/xr_panel.{h,c}`. The established
+OpenGL host uses this policy, and the native Vulkan core links the same policy
+and CPU painter. Android GL linking, pure policy/geometry tests and Mac Vulkan
+core validation pass. This extraction does not yet draw a native Vulkan panel
+or activate native menu actions; that integration remains outstanding. The
+policy does no per-frame allocation, file IO or GPU work.
