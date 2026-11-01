@@ -78,7 +78,11 @@ app-writable trace destination and collect the finished file within the lock.
 
 ## Current gate
 
-The native Quest game host/OpenXR integration is still incomplete. No Quest
+The native Quest game host/OpenXR integration is still incomplete. The shared
+Android game library and isolated APK build now link with no GL/EGL imports;
+first startup creates the foveated swapchain and selects offline guest shaders,
+and a short session reached FOCUSED with runtime-confirmed 120 Hz before losing
+focus again. This is startup evidence, not sustained gameplay. No Quest
 Vulkan combat-performance claim is established yet. The recorder, its
 lifecycle/error handling and the first Mac A/B runs are now verified. Retain the same measurement contract for the standalone Quest port
 and add compositor/GPU instrumentation.

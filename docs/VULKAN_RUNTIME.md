@@ -98,9 +98,21 @@ two-layer frames with required medium foveation at 1680x1760 per eye. Runtime
 logs establish session/foveation bring-up; during-session and post-session
 screencaps are black and do not establish visible scene correctness. Neither test runs a game.
 
-Game host/JNI integration, OpenXR world/overlay integration, shared input
-wiring, full game-call coverage and combat performance acceptance remain
-pending. Target retirement/resizing and pipeline preparation also need
+The shared game runtime now builds an Android Vulkan/OpenXR `libmain.so`:
+SDL supplies a retained Activity/JVM reference, the native enable2 factory
+creates the device, and game submissions target the foveated two-layer
+swapchain without GL/EGL imports. Shader archives are packaged as assets and
+extracted before guest startup. JNI setup on the shared worker uses SDL's
+thread-local attach/detach mechanism. Unfocused guest work uses a private
+scratch target which is never submitted or captured as XR output.
+
+The isolated HOTD4 Special experiment boots guest shaders on Adreno and creates
+the foveated swapchain. Initial runs stayed at XR IDLE. After stopping our stale
+Zink diagnostic, the native game reached READY, VISIBLE and FOCUSED, acquired
+its first game target, and received a runtime-confirmed 90 -> 120 Hz change.
+The session lost focus and stopped roughly two seconds later. These startup
+logs do not establish sustained game rendering or combat performance. World reprojection, per-eye offscreen copies, overlays, input parity
+and full game-call coverage remain pending. Target retirement/resizing and pipeline preparation also need
 complete game-path coverage. The reproducible Quest probe runner in
 `lindberghrecomp/tools/vulkan/test_quest_probe.py` holds the shared lock through
 cleanup, tests the core separately, and rejects stale XR logs using a unique
@@ -136,3 +148,30 @@ Next, extend Mac gameplay/reference coverage (including slow-motion and longer
 runs), cover remaining target/resource lifetime gaps, and bring up HOTD4 using
 the same runtime. Keep these Mac execution gates ahead of standalone Android
 integration; Quest/OpenXR acceptance remains pending.
+
+## Experimental Android game build
+
+Build without touching the OpenGL app's libraries or package identity:
+
+```sh
+python3 quest/build_vulkan.py hotd4sp \
+  --shader-pack build-vulkan-shaders-hotd4sp-play/hotd4sp.lvsp \
+  --gl-headers-root /path/to/mesa/include
+```
+
+The builder takes portable GL headers as guest ABI declarations only, compiles
+SPIR-V offline, and packages `game.lvsp` plus `fixed.lvsp`. It uses a separate
+build directory and `.vulkan` application ID suffix. It neither installs nor
+operates a headset, and carries no game data. Its inputs and APK hashes are
+recorded in `apk-manifest.json`. All four game modules use the same packaging
+path; only HOTD4 Special has been built through it so far.
+
+The existing GL display-cadence policy is shared in `display_cadence.c`:
+actual predicted display timing drives a near-60 Hz guest budget, including the
+one-time half-display-period correction for repeated 1/3 delivery. Atomic
+publication prevents the guest/renderer data race. Rate/session changes reset
+phase history; unsupported non-divisor refresh rates retain the guest's own
+budget. Runtime tests cover stable 120 Hz, phase correction, 60/72/90 Hz,
+period noise and reset behavior. The native host requests supported 120 Hz
+(or 60 Hz), logging the request separately from runtime-reported refresh.
+Do not equate a requested rate or CPU submission cadence with displayed FPS.

@@ -15,3 +15,17 @@ allprojects {
         mavenCentral()
     }
 }
+
+// Native Vulkan experiments use isolated artifacts and package IDs. Keep the
+// normal OpenGL modules and their staged libraries/assets independent.
+subprojects {
+    afterEvaluate { module ->
+        if (module.plugins.hasPlugin('com.android.application') &&
+            module.findProperty('nativeRenderer') == 'vulkan') {
+            module.android.defaultConfig.applicationId += '.vulkan'
+            module.android.sourceSets.main.jniLibs.setSrcDirs([module.property('nativeLibsDir')])
+            module.android.sourceSets.main.assets.setSrcDirs([module.property('nativeAssetsDir')])
+            module.android.sourceSets.main.java.srcDir(module.property('sdlJavaDir'))
+        }
+    }
+}
