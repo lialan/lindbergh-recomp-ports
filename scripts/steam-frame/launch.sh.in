@@ -1,0 +1,40 @@
+#!/bin/sh
+# @TITLE@ VR on Steam Frame: native AArch64 Linux, Vulkan and OpenXR.
+#
+#   ./launch.sh [/path/to/the game's folder] [game args...]
+#
+# The folder is the one holding @ELF@ (yours; none of it ships here). Without
+# an argument it is read from game-dir.txt beside this script, which the
+# first run with an argument writes. Add this script to Steam as a
+# non-Steam game to start it from the headset.
+#
+# Options go in env.txt beside this script (NAME=value per line, e.g.
+# LINDBERGH_MUTE=1); VR settings in vr.cfg in the game's folder. The log of
+# the last run is @GAME@.log beside this script.
+HERE=$(cd "$(dirname "$0")" && pwd)
+die() { echo "$*" >&2; exit 1; }
+
+GAME_DIR=
+if [ $# -gt 0 ] && [ -f "$1/@ELF@" ]; then
+    GAME_DIR=$(cd "$1" && pwd); shift
+    printf '%s\n' "$GAME_DIR" > "$HERE/game-dir.txt"
+elif [ -f "$HERE/game-dir.txt" ]; then
+    GAME_DIR=$(cat "$HERE/game-dir.txt")
+fi
+[ -n "$GAME_DIR" ] && [ -f "$GAME_DIR/@ELF@" ] ||
+    die "usage: $0 /path/to/the game's folder (the one holding @ELF@)"
+
+# The runtime's own libraries when the system has none of them
+LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$HERE/lib"
+export LD_LIBRARY_PATH
+export LINDBERGH_VULKAN_DIR="${LINDBERGH_VULKAN_DIR:-$HERE/vulkan}"
+if [ -f "$HERE/env.txt" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+        case $line in ''|'#'*) continue ;; *=*) export "$line" ;; esac
+    done < "$HERE/env.txt"
+fi
+# Every guest call is a host call, on this thread's stack: give it room
+ulimit -s 262144 2>/dev/null || ulimit -s unlimited 2>/dev/null || true
+
+cd "$GAME_DIR/$(dirname "@ELF@")" || die "cannot enter $GAME_DIR"
+"$HERE/@GAME@" "$(basename "@ELF@")" "$@" 2>&1 | tee "$HERE/@GAME@.log"
