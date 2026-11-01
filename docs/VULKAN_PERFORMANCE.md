@@ -446,3 +446,33 @@ and cannot satisfy the equal-quality acceptance gate. Timestamp commands can
 perturb scheduling, so retain uninstrumented controls before a performance
 claim. This session cleaned its private tree, preserved both installed APK
 hashes and released the shared lock.
+
+
+### Uniform half-density control: fragment work is only part of the cost
+
+The subsequent whole-lock run used the expanded 262-entry seed and uniform
+0.5 density, leaving eye dimensions at 2064x2280. It completed 3601 frames,
+prepared all 262 entries before use and reported no shader-record first-use
+creations. Its 599 combat submission records are complete and valid. It
+cleaned its private tree and preserved installed APK hashes. Artifacts:
+`build-quest-vulkan-offscreen/quest-recipes-density-half-profile-3600/`.
+
+GPU submission spans averaged 13.35 ms (p99 21.60 ms, maximum 26.26 ms),
+compared with 14.72 ms in the full-rate diagnostic. Recording-thread CPU
+averaged 11.69 ms (p99 19.99 ms), compared with 9.23 ms in the earlier run.
+CPU presentation cadence remained 59.23 FPS, with p99 24.32 ms and a
+57.81 ms worst interval. Uniform lower density changes image quality, and
+these sequential runs differ in loading timing, seed coverage and observed
+CPU cost; they are not a matched-scene performance acceptance comparison.
+The modest GPU reduction does not support solving the remaining problem
+solely by increasing foveation or reducing image quality.
+
+The next source-level investigation is redundant native command emission and
+index geometry uploads. The shared guest queue filters guest API state, but
+the current Vulkan packet flush still emits viewport, scissor, dynamic state
+and descriptor commands for each packet, while indexed draws rebuild/upload
+32-bit element arrays. Measure these costs and preserve render-pass/renderer
+state boundaries and guest buffer revision semantics when removing work.
+Retain full-quality uninstrumented and cold/warm controls before drawing a
+Quest performance conclusion. Actual acquired-map OpenXR foveation and
+physical/controller/display acceptance remain open.
