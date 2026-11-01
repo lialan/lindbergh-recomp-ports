@@ -223,3 +223,24 @@ do not establish a Vulkan speedup. Retained artifact:
 `build-vulkan-reference/hotd4sp-pacing-comparison.json`. This analysis adds no
 runtime instrumentation overhead. Quest GPU/compositor timing and sustained
 combat acceptance remain open.
+
+## Bounded Quest startup recheck
+
+The isolated APK rebuilt after the shared panel extraction. Session
+`build-quest-vulkan-game/quest-game-20261101-010224/` retained APK SHA256,
+raw all-buffer logcat, per-PID logs, process state, activity state and cleanup
+results. The real game loaded resources and the runtime reported loss of
+FOCUSED followed by VISIBLE, SYNCHRONIZED, STOPPING and IDLE. Android activity
+events show GuardianDialogActivity opening at 06:02:32.216 before session
+stop at 06:02:32.794. At the watchdog boundary, frame 26 was paused in
+`SDL_WaitEventTimeout`/`SDL_SemWait`; guest helper threads were waiting on
+conditions. This is a paused startup, not a measured Vulkan combat stall.
+The earlier launch with no native logs remains separate evidence.
+
+No Guardian/tracking bypass was attempted. Only proximity-close and wake were
+used. The app was stopped, both experiment env files restored, automation
+disabled, test capture cleanup completed and the exclusive lock released.
+The next headed measurement requires a valid tracking/boundary state, stable
+XR focus and actual combat before any FPS/pacing conclusion. A future log
+collector should stream all-buffer logcat from before launch: a bounded
+snapshot can lose early native startup logs to buffer turnover.
