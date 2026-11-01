@@ -37,7 +37,8 @@ STRIP=$NDK/toolchains/llvm/prebuilt/$HOST/bin/llvm-strip
 
 # one game per build: each is the app's libmain.so
 B=$ROOT/build-quest/$ID
-cmake -S "$ROOT" -B "$B" -G Ninja -DLINDBERGH_GAMES="$ID" \
+# The gl4es OpenGL app. Native Vulkan/OpenXR APKs: quest/build_vulkan.py.
+cmake -S "$ROOT" -B "$B" -G Ninja -DLINDBERGH_GAMES="$ID" -DLINDBERGH_RENDERER=OPENGL \
     -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
     -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DCMAKE_BUILD_TYPE=Release \
     -DSDL2_DIR="$DEPS/sdl2-android/lib/cmake/SDL2" \

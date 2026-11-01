@@ -135,8 +135,18 @@ cd lindbergh-recomp-ports
 ```
 
 `build-macos.sh` lifts the game into the gitignored `games/<game>/generated/`
-and builds `build-mac/<game>`; run it again after an update and only what
-changed is rebuilt. The games start muted.
+and builds it; run it again after an update and only what changed is rebuilt.
+The games start muted.
+
+The native Vulkan renderer is the default (`build-mac-vulkan/<game>`; needs
+`brew install vulkan-loader vulkan-headers glslang spirv-tools spirv-cross`,
+plus the game's offline shader archive at run time, `LINDBERGH_VULKAN_SHADERS`
+or `build-vulkan-shaders-<game>/<game>.lvsp`). So far only House of the Dead 4
+Special has been brought up on it. Pass `--opengl` to both scripts for the
+OpenGL renderer (`build-mac/<game>`), e.g.
+`./scripts/build-macos.sh --opengl hotd4 ...` then `./scripts/run-macos.sh --opengl hotd4 ...`.
+With CMake directly, `-DLINDBERGH_RENDERER=OPENGL` or `=VULKAN` chooses; the
+default is Vulkan on macOS and Android, OpenGL elsewhere.
 
 | | |
 | --- | --- |

@@ -22,6 +22,14 @@ endif()
 
 set(LINDBERGH_GAMES "" CACHE STRING "games to build (empty: every one with lifted code)")
 
+# Native Vulkan by default on macOS and Android/Quest; -DLINDBERGH_RENDERER=OPENGL
+# builds the OpenGL renderer. (lindberghrecomp keeps the same default when built
+# on its own; defined here first because C++ must be enabled at this scope.)
+if(APPLE OR ANDROID)
+    set(LINDBERGH_RENDERER "VULKAN" CACHE STRING "Host renderer: OPENGL or VULKAN")
+else()
+    set(LINDBERGH_RENDERER "OPENGL" CACHE STRING "Host renderer: OPENGL or VULKAN")
+endif()
 if(LINDBERGH_RENDERER STREQUAL "VULKAN")
     enable_language(CXX)
 endif()

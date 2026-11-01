@@ -171,8 +171,8 @@ The ordinary CTest test uses only source-owned fixtures and needs no game data.
 
 ## macOS game-call integration
 
-Use `-DLINDBERGH_RENDERER=VULKAN` to opt into the macOS game bring-up build.
-The default remains `OPENGL`. Vulkan builds generate separate typed guest thunks
+Vulkan is the default renderer on macOS and Android (`-DLINDBERGH_RENDERER=OPENGL`
+keeps OpenGL; other hosts default to OpenGL). Vulkan builds generate separate typed guest thunks
 inside their build directory and map the guest ABI to Vulkan-owned state. GL
 headers describe the guest ABI only; neither a host OpenGL context nor Apple's
 OpenGL framework is used. Cabinet, mouse/gun input, audio, guest memory and CPU

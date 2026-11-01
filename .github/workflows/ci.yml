@@ -23,9 +23,13 @@ jobs:
           .venv/bin/python lindberghrecomp/tools/recomp/test_driver.py
           .venv/bin/python lindberghrecomp/pcrecomp/tools/lift/test_movmskps.py
           .venv/bin/python lindberghrecomp/pcrecomp/tools/lift/test_sse2_lanes.py
-      - run: cmake -S . -B build-mac -G Ninja
+      - run: cmake -S . -B build-mac -G Ninja -DLINDBERGH_RENDERER=OPENGL
       - run: cmake --build build-mac
       - run: build-mac/lindberghrecomp/lindbergh_rt_selftest
+      # The default renderer on macOS: native Vulkan.
+      - run: brew install vulkan-loader vulkan-headers glslang spirv-tools spirv-cross molten-vk
+      - run: cmake -S . -B build-mac-vulkan -G Ninja
+      - run: cmake --build build-mac-vulkan
 
   windows-openxr:
     # No game or headset required. Compiles the Windows OpenXR host and runs
