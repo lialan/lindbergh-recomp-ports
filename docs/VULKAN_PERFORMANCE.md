@@ -405,3 +405,44 @@ combat, thermal behavior and a matched-quality OpenGL comparison remain open.
 The normal Vulkan/OpenXR APK builds with the seed, and archive inspection
 confirms the exact seed and staged native library are packaged; that APK has
 not been installed or physically accepted as part of this milestone.
+
+
+### Submission profiling separates GPU pressure from preparation misses
+
+The opt-in frame-ring profiler passed Mac GPU reuse/shutdown/handoff tests and
+a real Mac guest boot. An actual Quest run with the same full-resolution,
+full-rate-density diagnostic completed 3601 frames and returned valid two-eye
+captures. Its 599-frame combat submission window (3000-3598) contains 599
+complete GPU/CPU records, with no unavailable query or cross-thread CPU result
+in that selected interval. Artifacts:
+`build-quest-vulkan-offscreen/quest-recipes-submission-profile-3600/`
+(submissions.csv, submission-summary.json, frames.csv, timing-summary.json,
+updated recipe catalogue, images and provenance/cleanup report).
+
+| Metric, per-frame sums | Mean | p99 | Maximum |
+| --- | ---: | ---: | ---: |
+| GPU submission span | 14.72 ms | 21.41 ms | 31.58 ms |
+| Slot-reuse fence wait | 0.65 ms | 10.82 ms | 23.19 ms |
+| Command-pool reset | 0.38 ms | 0.69 ms | 0.94 ms |
+| Resource retirement | 0.07 ms | 0.14 ms | 0.62 ms |
+| Renderer recording thread CPU | 9.23 ms | 13.71 ms | 56.70 ms |
+| Upload bytes | 2.29 MiB | 5.64 MiB | 5.67 MiB |
+
+This repeat also discovered two previously unseen shader/layout combinations
+at frame 3150: their 44.916 ms preparation batch accounts for its 56.70 ms
+recording CPU and 60.41 ms presentation interval. The updated catalogue now
+contains 262 entries. The earlier zero-miss seed result was valid for that
+observed run, but did not prove complete coverage even for subsequent runs of
+the early sequence. Known recipes remain prepared; additional random/content
+paths must be recorded and tested.
+
+Separately, frames 3081-3083 each span about 31.5 ms on the GPU, followed by
+backpressure when those buffered slots are reused. Small pool-reset and
+retirement costs do not account for that burst. This establishes GPU pressure
+in the unfoveated/full-rate diagnostic, without identifying its exact pass or
+claiming equivalence to real OpenXR foveation. Uniform half-density is the next
+diagnostic control for fragment-work sensitivity; it changes image quality
+and cannot satisfy the equal-quality acceptance gate. Timestamp commands can
+perturb scheduling, so retain uninstrumented controls before a performance
+claim. This session cleaned its private tree, preserved both installed APK
+hashes and released the shared lock.

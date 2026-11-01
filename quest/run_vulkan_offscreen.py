@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--pipeline-cache",type=Path,help="optional same-device cache from an earlier diagnostic")
     parser.add_argument("--prepare-timing",action="store_true",help="log native pipeline preparation time and creation counts")
+    parser.add_argument("--submission-timing",action="store_true",help="GPU timestamp spans and CPU recording/retirement costs; no extra waits")
     parser.add_argument("--pipeline-recipes",type=Path,help="portable pipeline seed; opaque driver cache remains cold unless separately supplied")
     parser.add_argument("--no-recipes",action="store_true",help="disable recipe collection/preparation for a diagnostic control")
     parser.add_argument("--timing-from",type=int,default=0)
@@ -84,6 +85,7 @@ def main():
          "LINDBERGH_FRAME_TIMINGS":remote+"/frames.csv","LINDBERGH_TIMING_FROM":str(args.timing_from),"LINDBERGH_TIMING_TO":str(args.frames-2)}
     if args.density is not None:env["LINDBERGH_VULKAN_OFFSCREEN_DENSITY"]=str(args.density)
     if args.prepare_timing:env["LINDBERGH_VULKAN_PREPARE_TIMING"]="1"
+    if args.submission_timing:env["LINDBERGH_VULKAN_SUBMISSION_TIMINGS"]=remote+"/submissions.csv"
     if args.pipeline_recipes:env["LINDBERGH_VULKAN_RECIPES_SEED"]=remote+"/seed.lvpr"
     if args.no_recipes:env["LINDBERGH_VULKAN_RECIPES"]=""
     if args.menu:env.update(LINDBERGH_VULKAN_FAKE_MENU="1",LINDBERGH_VULKAN_FAKE_MENU_LOOK="1")
@@ -129,7 +131,7 @@ def main():
         text=(output/"game.log").read_text(errors="replace")
         reached=[int(n) for n in re.findall(r"LINDBERGH_EXIT_AFTER: (\d+) frames done",text)]
         report.update(exit_code=process.returncode,reached_frame_limit=bool(reached and max(reached)>=args.frames))
-        for name in ("capture.ppm","capture.right.ppm","frames.csv","pipeline-cache.bin","pipeline-cache.bin.recipes"):
+        for name in ("capture.ppm","capture.right.ppm","frames.csv","submissions.csv","pipeline-cache.bin","pipeline-cache.bin.recipes"):
             command("pull",remote+"/"+name,output/name,check=False)
         report["artifacts"]={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in output.iterdir() if p.is_file() and p.name.endswith((".ppm",".csv"))}
         report["eye_images"]={}

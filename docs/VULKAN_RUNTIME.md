@@ -590,3 +590,39 @@ corrupt-file rejection and unknown-shader rejection. Actual Mac guest boot
 records four recipes; a subsequent cold-cache boot with the seed prepares all
 four and reaches its endpoint with zero shader-record first-use creations.
 The corresponding Quest combat result is documented in VULKAN_PERFORMANCE.md.
+
+
+## Opt-in GPU submission and worker profiling
+
+`LINDBERGH_VULKAN_SUBMISSION_TIMINGS=/private/path/submissions.csv` enables
+profiling on the shared frame ring before its first commands are recorded.
+Each buffered slot owns two timestamp queries. The command buffer resets
+its queries and records TOP/BOTTOM timestamps; results are read only after
+the normal slot-reuse fence has completed. Shutdown drains the remaining
+records after its existing fence waits. Profiling adds no host wait,
+queue-idle or extra submission. Timestamp commands can perturb GPU scheduling,
+so these traces are diagnostic controls, not uninstrumented performance proof.
+Without the option there are no query objects, timestamp commands, profile
+files or profiling clock reads.
+
+CSV records retain submission ID, guest frame, slot, query availability, GPU
+span, slot reuse wait, command-pool reset, resource retirement, command-recording
+wall time, submission CPU wall time, uploaded bytes, retained references and
+recording thread CPU time. Recording wall time includes waiting for queued
+game calls; its thread CPU time excludes that idle time. The initial graphics
+handoff can start recording on the game thread and finish on the worker. Such
+thread CPU deltas are explicitly invalid and zero, rather than subtracting
+unrelated clocks. GPU timestamps remain valid. GPU spans are not utilization
+or display/compositor timings, and asynchronous execution prevents attributing
+a presentation spike solely to the same-frame GPU value.
+
+`quest/run_vulkan_offscreen.py --submission-timing` enables and retrieves the
+trace inside its existing whole-session lock/private-tree lifetime. Analyze a
+fully captured interval with `lindberghrecomp/tools/vulkan/submission_timings.py
+TRACE --from-frame N --to-frame M --output REPORT`. The analyzer aggregates
+multiple submissions by frame, accepts out-of-order retirement, retains worst
+frames and rejects missing frames, duplicate submissions, unavailable GPU
+queries, invalid thread deltas and nonfinite/negative durations. Its explicit
+window must exclude an initial thread-handoff row when thread CPU data is
+required. Core GPU tests cover buffered reuse, all final unrecycled records
+and a real cross-thread recording handoff.
