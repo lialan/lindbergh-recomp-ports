@@ -28,6 +28,8 @@ def main():
     parser.add_argument("--pipeline-cache",type=Path,help="optional same-device cache from an earlier diagnostic")
     parser.add_argument("--prepare-timing",action="store_true",help="log native pipeline preparation time and creation counts")
     parser.add_argument("--submission-timing",action="store_true",help="GPU timestamp spans and CPU recording/retirement costs; no extra waits")
+    parser.add_argument("--state-filter",choices=("on","off"),default="on",help="native command filtering; off is an identical-binary comparison control")
+    parser.add_argument("--command-stats",action="store_true",help="count issued/filtered native commands")
     parser.add_argument("--pipeline-recipes",type=Path,help="portable pipeline seed; opaque driver cache remains cold unless separately supplied")
     parser.add_argument("--no-recipes",action="store_true",help="disable recipe collection/preparation for a diagnostic control")
     parser.add_argument("--timing-from",type=int,default=0)
@@ -86,6 +88,8 @@ def main():
     if args.density is not None:env["LINDBERGH_VULKAN_OFFSCREEN_DENSITY"]=str(args.density)
     if args.prepare_timing:env["LINDBERGH_VULKAN_PREPARE_TIMING"]="1"
     if args.submission_timing:env["LINDBERGH_VULKAN_SUBMISSION_TIMINGS"]=remote+"/submissions.csv"
+    env["LINDBERGH_VULKAN_STATE_FILTER"]="1" if args.state_filter=="on" else "0"
+    if args.command_stats:env["LINDBERGH_VULKAN_COMMAND_STATS"]="1"
     if args.pipeline_recipes:env["LINDBERGH_VULKAN_RECIPES_SEED"]=remote+"/seed.lvpr"
     if args.no_recipes:env["LINDBERGH_VULKAN_RECIPES"]=""
     if args.menu:env.update(LINDBERGH_VULKAN_FAKE_MENU="1",LINDBERGH_VULKAN_FAKE_MENU_LOOK="1")

@@ -626,3 +626,38 @@ queries, invalid thread deltas and nonfinite/negative durations. Its explicit
 window must exclude an initial thread-handoff row when thread CPU data is
 required. Core GPU tests cover buffered reuse, all final unrecycled records
 and a real cross-thread recording handoff.
+
+
+## Native Vulkan command filtering
+
+The shared `Renderer` now filters repeated viewport/scissor, stencil dynamic
+values, depth bias, blend constants, descriptor groups plus dynamic offsets,
+vertex/index streams and matrix push constants. Existing pipeline-bind
+filtering remains active. Float/matrix snapshots compare exact bytes. Each
+renderer invalidates its cached state on new pass/command-buffer attachment
+and when leaving recording: another renderer may have overwritten any Vulkan
+binding. Within a renderer all variants share its layout and dynamic-state
+declarations. Descriptor group snapshots retain their entire offset list;
+partial binds invalidate overlapping groups so a later grouped bind cannot
+reuse disturbed sets. Cached handles remain covered by existing frame-ring
+resource retention.
+
+Filtering is enabled by default. `LINDBERGH_VULKAN_STATE_FILTER=0` disables
+only the new filtering for an identical-binary comparison; the previous
+pipeline-bind filtering is retained in both modes.
+`LINDBERGH_VULKAN_COMMAND_STATS=1` counts emitted and filtered commands by
+kind, reporting totals after the render worker drains at shutdown. Counters
+are disabled by default and share the single command-recording owner. The
+offscreen runner exposes `--state-filter on|off` and `--command-stats`, and
+records their environment alongside binary/compiler provenance.
+
+Mac GPU validation covers identical persistent indexed draws, returning to a
+renderer after another renderer changes viewport/scissor/dynamic state and
+push constants, new-command-buffer invalidation, descriptor groups with
+dynamic offsets, partial overlapping binds and the comparison switch.
+Stereo readback remains correct. Actual guest boot with filtering on/off
+produces byte-identical left and right images; retained evidence is
+`build-mac-vulkan-offscreen/state-filter-boot-parity.json` and associated logs.
+The normal Vulkan/OpenXR native library also compiles. Quest comparison data
+is recorded in the performance document; physical XR/controller/display and
+all-title acceptance remain separate open gates.

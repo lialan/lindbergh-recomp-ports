@@ -476,3 +476,44 @@ state boundaries and guest buffer revision semantics when removing work.
 Retain full-quality uninstrumented and cold/warm controls before drawing a
 Quest performance conclusion. Actual acquired-map OpenXR foveation and
 physical/controller/display acceptance remain open.
+
+
+### Native command filtering: fewer commands, mixed pacing evidence
+
+Actual Quest full-resolution/full-rate-density controls completed 3601 frames
+each using an identical native binary (library SHA-256
+`6d91b6c1932a4375b03ccf05a3c910b3ad18aabe111c37c9f03f56c160c455c6`),
+262-entry seed, dual simulated guns, submission profiling and command counters.
+Both prepared all entries before use and reported zero first-use pipelines.
+Both returned valid distinct two-eye captures, cleaned private trees and
+preserved installed APK hashes. Both filtered-run combat images were inspected
+and retain street geometry/textures, HUD, enemies and guns. Artifacts:
+`build-quest-vulkan-offscreen/quest-state-filter-{off,on}-3600/`, with aggregate
+`build-quest-vulkan-offscreen/state-filter-comparison.json`.
+
+| Frames 3000-3598 | Filter off | Filter on |
+| --- | ---: | ---: |
+| Renderer recording CPU, mean | 8.81 ms | 8.68 ms |
+| Renderer recording CPU, p99 | 14.18 ms | 12.94 ms |
+| GPU span, mean | 14.60 ms | 14.66 ms |
+| CPU presentation cadence | 59.96 FPS | 59.44 FPS |
+| CPU interval, p99 | 25.11 ms | 26.40 ms |
+| CPU interval, maximum | 33.09 ms | 44.33 ms |
+
+Whole-run counters show 16.34 tracked native state/binding commands per draw
+without the new filtering versus 8.76 with it, approximately 46% fewer. Draw,
+clear, pass and transfer commands are outside these counters. Pipeline binds
+were already filtered in both controls. The filtered run additionally skips
+3,869,729 commands: about 70% of viewport/scissor and most dynamic state,
+56% of descriptor binds, 14% of vertex-buffer binds and 70% of matrix pushes.
+Index-buffer binds do not repeat because the frontend uploads a fresh index
+array for each indexed draw; that is the next persistent-geometry target.
+
+These sequential runs have different draw counts (477,096 versus 507,600),
+gameplay/loading timing and uncontrolled clock/thermal history. Normalize
+command counts by draw count, and do not claim a formal FPS gain or pacing
+acceptance: the filtered run has a worse maximum interval despite improved
+recording CPU tail. GPU cost is effectively unchanged. The source change
+removes demonstrated redundant work and preserves tested output, while the
+no-regression/smooth-combat gate remains open pending stronger scene-matched,
+uninstrumented and actual OpenXR measurements.
