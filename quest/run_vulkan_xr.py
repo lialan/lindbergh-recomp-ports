@@ -95,9 +95,14 @@ def main():
         app_home=shell("run-as",PACKAGE,"pwd").stdout.decode().strip()
         private=app_home+"/files/.codex-xr-"+token
         report["private_game_directory"]=private
-        shell("run-as",PACKAGE,"mkdir","-p",private)
+        # The game's folder goes where the app looks under its base (HOTD4:
+        # the base itself; GSE: vsg_l/), and runs from the executable's folder.
+        stage=private+("/"+conf["HEADSET_SUB"] if conf["HEADSET_SUB"] else "")
+        game_dir=stage+("/"+ELF.rsplit("/",1)[0] if "/" in ELF else "")
+        report["game_directory"]=game_dir
+        shell("run-as",PACKAGE,"mkdir","-p",stage)
         workspace_created=True
-        transfer=shlex.join(["tar","-C",source,"-cf","-",*PARTS])+" | "+shlex.join(["run-as",PACKAGE,"tar","-C",private,"-xf","-"])
+        transfer=shlex.join(["tar","-C",source,"-cf","-",*PARTS])+" | "+shlex.join(["run-as",PACKAGE,"tar","-C",stage,"-xf","-"])
         save("stage.txt",command("shell",transfer,timeout=180))
         env={"LINDBERGH_AUTOSTART":"8","LINDBERGH_AUTOGUN":"2","LINDBERGH_MUTE":"1","LINDBERGH_GL_THREAD":"1",
              "LINDBERGH_EXIT_AFTER":"3600",
@@ -115,16 +120,16 @@ def main():
         report["environment"]=env
         # XR settings come from the player's staged elf/vr.cfg, as in the GL
         # app; --set LINDBERGH_XR_SET=... remains available for one-off runs.
-        cfg=shell("run-as",PACKAGE,"cat",private+"/elf/vr.cfg",check=False)
+        cfg=shell("run-as",PACKAGE,"cat",game_dir+"/vr.cfg",check=False)
         report["vr_cfg"]=cfg.stdout.decode(errors="replace") if cfg.returncode==0 else None
         (out/"vr.cfg").write_bytes(cfg.stdout if cfg.returncode==0 else b"")
         envfile=out/"env.txt";envfile.write_text("\n".join(k+"="+v for k,v in env.items())+"\n")
-        for destination in (private+"/env.txt",private+"/elf/env.txt"):
+        for destination in (private+"/env.txt",game_dir+"/env.txt"):
             with envfile.open("rb") as config:
                 subprocess.run([adb,"-s",SERIAL,"shell","run-as "+PACKAGE+" sh -c "+shlex.quote("cat > "+shlex.quote(destination))],stdin=config,capture_output=True,check=True,timeout=30)
         # Fail before Activity launch when the app UID cannot read staged
         # files. The Activity independently enforces this in its actual context.
-        probe=save("app-uid-access.txt",shell("run-as",PACKAGE,"sha256sum",private+"/"+ELF,private+"/elf/env.txt",check=False))
+        probe=save("app-uid-access.txt",shell("run-as",PACKAGE,"sha256sum",stage+"/"+ELF,game_dir+"/env.txt",check=False))
         hashes=[line.split()[0] for line in probe.stdout.decode().splitlines() if line.split()]
         if probe.returncode or hashes != [expected,hashlib.sha256(envfile.read_bytes()).hexdigest()]:
             raise RuntimeError("app UID cannot verify staged ELF/env; refusing shared-path fallback")
@@ -211,7 +216,7 @@ def main():
     lines=[line for line in fresh.splitlines() if pid and re.match(r"^\d\d-\d\d\s+\S+\s+"+re.escape(pid)+r"\s+",line)]
     (out/"logcat-pid.txt").write_text("\n".join(lines)+"\n")
     report["fresh_log_marker"]=bool(fresh)
-    expected_dir=private+"/elf"
+    expected_dir=report.get("game_directory","")
     selected=[line.split("[android] game directory ",1)[1].strip() for line in lines if "[android] game directory " in line]
     normalize=lambda path:path.replace("/storage/emulated/0/","/sdcard/")
     report["private_game_selected"]=bool(selected) and all(normalize(path)==expected_dir for path in selected)

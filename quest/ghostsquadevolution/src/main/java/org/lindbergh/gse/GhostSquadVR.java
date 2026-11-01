@@ -53,8 +53,31 @@ public class GhostSquadVR extends SDLActivity {
         return new String[] { "SDL2", "openal", "openxr_loader", "main" };
     }
 
+    @Override
+    protected String[] getArguments() {
+        String path = getIntent().getBooleanExtra("lindbergh.require_private_game", false) ?
+                getIntent().getStringExtra("lindbergh.private_game") : null;
+        return path == null ? super.getArguments() : new String[] { "--private-game", path };
+    }
+
     private String checkGame() {
         File own = getExternalFilesDir(null);
+        // Diagnostics must never silently run against the player's shared tree.
+        // Check in the real app process: shell-readable storage is insufficient.
+        if (getIntent().getBooleanExtra("lindbergh.require_private_game", false)) {
+            String path = getIntent().getStringExtra("lindbergh.private_game");
+            if (path == null || !path.matches(java.util.regex.Pattern.quote(getFilesDir().getAbsolutePath()) +
+                    "/\\.codex-xr-[0-9a-f]{32}")) return "Invalid private diagnostic path";
+            File vsg = new File(path, "vsg_l/vsg");
+            File env = new File(path, "vsg_l/env.txt");
+            if (!vsg.canRead() || !env.canRead() || !getString(R.string.vsg_sha256).trim().equalsIgnoreCase(sha256(vsg))) {
+                String error = "Private game diagnostic refused: app cannot read the staged game/config.";
+                Log.e(TAG, error);
+                return error;
+            }
+            Log.i(TAG, "private game verified: " + vsg + ", env sha256 " + sha256(env));
+            return null;
+        }
         try {   /* a build with the game inside unpacks it itself, after this */
             if (Arrays.asList(getAssets().list("")).contains("vsg_l.files")) return null;
         } catch (Exception e) { }

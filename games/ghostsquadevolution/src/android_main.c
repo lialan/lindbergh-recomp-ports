@@ -164,16 +164,18 @@ static void *run_game(void *arg)
 
 int SDL_main(int argc, char **argv)
 {
-    (void)argc; (void)argv;
-    const char *own = SDL_AndroidGetExternalStoragePath();
+    /* --private-game <dir>: a diagnostic run from an app-private copy (quest/run_vulkan_xr.py) */
+    const char *diagnostic = NULL;
+    if (argc == 3 && strcmp(argv[1], "--private-game") == 0) diagnostic = argv[2];
+    const char *own = diagnostic ? diagnostic : SDL_AndroidGetExternalStoragePath();
     if (own) {
         char logpath[1024];
         snprintf(logpath, sizeof logpath, "%s/gse.log", own);
         g_log = fopen(logpath, "w");
         log_to_logcat();
-        unpack_game(own);
+        if (!diagnostic) unpack_game(own);
     }
-    const char *bases[2] = { own, "/sdcard/GhostSquadEvolution" };
+    const char *bases[2] = { own, diagnostic ? NULL : "/sdcard/GhostSquadEvolution" };
     char dir[1024] = "";
     const char *base = NULL;
     for (int i = 0; i < 2 && !base; i++) {
