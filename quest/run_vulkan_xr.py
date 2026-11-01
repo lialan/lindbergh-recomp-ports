@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded HOTD4SP Vulkan/OpenXR APK check; run ENTIRE script under quest3-lock.
+"""Bounded Vulkan/OpenXR APK check for any game; run ENTIRE script under quest3-lock.
 
 Only updates/stops the experimental .vulkan package. Copies game assets into
 a unique app-internal directory, removes that copy after use, streams fresh
@@ -16,12 +16,17 @@ import uuid
 from pathlib import Path
 
 SERIAL="2G97C5ZJ0G02DQ"
-PACKAGE="org.lindbergh.hotd4sp.vr.vulkan"
-ORIGINAL="org.lindbergh.hotd4sp.vr"
-ACTIVITY="org.lindbergh.hotd4sp.HouseOfTheDead4SpecialVR"
+
+def game_conf(root,game):
+    """games/<game>/game.conf is shell; read the variables the runner needs."""
+    script='. "$1"; printf "%s\\0" "$PKG" "$ACTIVITY" "$HEADSET_DIR" "${HEADSET_SUB:-}" "$GAME_PARTS" "$ELF" "$SHA_FILE"'
+    values=subprocess.run(["bash","-c",script,"conf",str(root/"games"/game/"game.conf")],capture_output=True,check=True).stdout.decode().split("\0")
+    keys=("PKG","ACTIVITY","HEADSET_DIR","HEADSET_SUB","GAME_PARTS","ELF","SHA_FILE")
+    return dict(zip(keys,values))
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--game",default="hotd4sp",help="a games/<game> module (default hotd4sp)")
     parser.add_argument("--apk",type=Path,required=True)
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--seconds",type=int,default=70)
@@ -30,16 +35,20 @@ def main():
     parser.add_argument("--set",action="append",default=[],metavar="KEY=VALUE",help="override/add one game environment entry")
     args=parser.parse_args()
     if not args.interactive and not 10<=args.seconds<=150:parser.error("watchdog must be 10..150 seconds")
+    root=Path(__file__).resolve().parents[1]
+    conf=game_conf(root,args.game)
+    ORIGINAL=conf["PKG"];PACKAGE=ORIGINAL+".vulkan";ACTIVITY=conf["ACTIVITY"]
+    ELF=conf["ELF"];PARTS=conf["GAME_PARTS"].split()
     sdk=Path.home()/"Library/Android/sdk"
     aapt=sorted((sdk/"build-tools").glob("*/aapt2"))[-1]
     badging=subprocess.run([str(aapt),"dump","badging",str(args.apk.resolve())],capture_output=True,text=True,check=True).stdout
     if not re.search(r"^package: name='"+re.escape(PACKAGE)+r"'",badging,re.M):parser.error("requires the isolated .vulkan APK")
-    root=Path(__file__).resolve().parents[1];out=args.output.resolve()
+    out=args.output.resolve()
     if out.exists() and any(out.iterdir()):parser.error("output must be fresh")
     out.mkdir(parents=True,exist_ok=True)
     adb=str(Path.home()/"Library/Android/sdk/platform-tools/adb")
     own="/sdcard/Android/data/"+PACKAGE+"/files"
-    source="/sdcard/HouseOfTheDead4Special"
+    source=conf["HEADSET_DIR"]+("/"+conf["HEADSET_SUB"] if conf["HEADSET_SUB"] else "")
     token=uuid.uuid4().hex;private=None
     report={"serial":SERIAL,"token":token,"apk_sha256":hashlib.sha256(args.apk.read_bytes()).hexdigest(),
             "scope":"Actual game/OpenXR session; physical aiming/display/combat acceptance remains separate"}
@@ -57,7 +66,7 @@ def main():
         return shell("ls","-d",path,check=False).returncode==0
     def original_files():
         result={}
-        for name in ("env.txt","hotd4sp.log","HOW-TO-ADD-THE-GAME.txt","elf/hod4M.elf","fs"):
+        for name in ("env.txt",args.game+".log","HOW-TO-ADD-THE-GAME.txt",ELF,*[p for p in PARTS if p!=ELF.split("/")[0]]):
             path=own+"/"+name
             if not exists(path):result[name]=None
             elif shell("test","-f",path,check=False).returncode==0:
@@ -69,13 +78,13 @@ def main():
     original=original_files();report["original_files_before"]=original
     try:
         print("Locked headed session:",out,flush=True)
-        expected=(root/"games/hotd4sp/generated/hod4M.elf.sha256").read_text().strip()
-        actual=shell("sha256sum",source+"/elf/hod4M.elf").stdout.decode().split()[0]
+        expected=(root/"games"/args.game/"generated"/conf["SHA_FILE"]).read_text().strip()
+        actual=shell("sha256sum",source+"/"+ELF).stdout.decode().split()[0]
         if expected!=actual:raise RuntimeError("source ELF differs from lifted input")
         report["elf_sha256"]=actual
-        if shell("find",source+"/elf",source+"/fs","-type","l").stdout.strip():raise RuntimeError("independent staging requires no source symlinks")
+        if shell("find",*[source+"/"+p for p in PARTS],"-type","l").stdout.strip():raise RuntimeError("independent staging requires no source symlinks")
         available=int(shell("df","-k","/sdcard").stdout.decode().splitlines()[-1].split()[3])
-        size=sum(int(line.split()[0]) for line in shell("du","-sk",source+"/elf",source+"/fs").stdout.decode().splitlines())
+        size=sum(int(line.split()[0]) for line in shell("du","-sk",*[source+"/"+p for p in PARTS]).stdout.decode().splitlines())
         if available<size+512*1024:raise RuntimeError("insufficient space for private app game copy")
         save("install.txt",command("install","-r",args.apk.resolve(),timeout=90));installed=True
         report["experimental_apk_after_install"]=apk_hashes(PACKAGE)
@@ -88,7 +97,7 @@ def main():
         report["private_game_directory"]=private
         shell("run-as",PACKAGE,"mkdir","-p",private)
         workspace_created=True
-        transfer=shlex.join(["tar","-C",source,"-cf","-","elf","fs"])+" | "+shlex.join(["run-as",PACKAGE,"tar","-C",private,"-xf","-"])
+        transfer=shlex.join(["tar","-C",source,"-cf","-",*PARTS])+" | "+shlex.join(["run-as",PACKAGE,"tar","-C",private,"-xf","-"])
         save("stage.txt",command("shell",transfer,timeout=180))
         env={"LINDBERGH_AUTOSTART":"8","LINDBERGH_AUTOGUN":"2","LINDBERGH_MUTE":"1","LINDBERGH_GL_THREAD":"1",
              "LINDBERGH_EXIT_AFTER":"3600",
@@ -115,7 +124,7 @@ def main():
                 subprocess.run([adb,"-s",SERIAL,"shell","run-as "+PACKAGE+" sh -c "+shlex.quote("cat > "+shlex.quote(destination))],stdin=config,capture_output=True,check=True,timeout=30)
         # Fail before Activity launch when the app UID cannot read staged
         # files. The Activity independently enforces this in its actual context.
-        probe=save("app-uid-access.txt",shell("run-as",PACKAGE,"sha256sum",private+"/elf/hod4M.elf",private+"/elf/env.txt",check=False))
+        probe=save("app-uid-access.txt",shell("run-as",PACKAGE,"sha256sum",private+"/"+ELF,private+"/elf/env.txt",check=False))
         hashes=[line.split()[0] for line in probe.stdout.decode().splitlines() if line.split()]
         if probe.returncode or hashes != [expected,hashlib.sha256(envfile.read_bytes()).hexdigest()]:
             raise RuntimeError("app UID cannot verify staged ELF/env; refusing shared-path fallback")
@@ -152,14 +161,14 @@ def main():
         save("process.txt",shell("ps","-A","-o","PID,NAME,ARGS",check=False))
         save("activity.txt",shell("dumpsys","activity","activities",check=False))
         save("exit-info.txt",shell("dumpsys","activity","exit-info",PACKAGE,check=False))
-        for name in ("hotd4sp.log","capture.ppm","frames.csv","submissions.csv","pipelines.bin.recipes"):
+        for name in (args.game+".log","capture.ppm","frames.csv","submissions.csv","passes.csv","pipelines.bin.recipes"):
             # exec-out can return zero for a remote cat error; do not save
             # error text as an image, CSV or binary pipeline recipe file.
             if shell("run-as",PACKAGE,"test","-f",private+"/"+name,check=False).returncode:
                 report.setdefault("missing_artifacts",[]).append(name)
                 continue
             result=command("exec-out","run-as",PACKAGE,"cat",private+"/"+name,check=False)
-            if result.returncode==0:(out/("game.log" if name=="hotd4sp.log" else name)).write_bytes(result.stdout)
+            if result.returncode==0:(out/("game.log" if name==args.game+".log" else name)).write_bytes(result.stdout)
         with (out/"screen.png").open("wb") as picture:
             subprocess.run([adb,"-s",SERIAL,"exec-out","screencap","-p"],stdout=picture,check=True,timeout=20)
     except Exception as error:

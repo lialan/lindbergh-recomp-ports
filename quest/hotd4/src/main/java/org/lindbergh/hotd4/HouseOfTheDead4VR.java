@@ -54,8 +54,36 @@ public class HouseOfTheDead4VR extends SDLActivity {
         return new String[] { "SDL2", "openal", "openxr_loader", "main" };
     }
 
+    @Override
+    protected String[] getArguments() {
+        String path = getIntent().getBooleanExtra("lindbergh.require_private_game", false) ?
+                getIntent().getStringExtra("lindbergh.private_game") : null;
+        return path == null ? super.getArguments() : new String[] { "--private-game", path };
+    }
+
     private String checkGame() {
         File own = getExternalFilesDir(null);
+        // Diagnostics must never silently run against the player's shared tree.
+        // Check in the real app process: shell-readable storage is insufficient.
+        if (getIntent().getBooleanExtra("lindbergh.require_private_game", false)) {
+            String path = getIntent().getStringExtra("lindbergh.private_game");
+            if (path == null || !path.matches(java.util.regex.Pattern.quote(getFilesDir().getAbsolutePath()) +
+                    "/\\.codex-xr-[0-9a-f]{32}")) return "Invalid private diagnostic path";
+            own = new File(path);
+            File elf = new File(own, "elf/hod4M.elf");
+            File env = new File(own, "elf/env.txt");
+            File fs = new File(own, "fs");
+            File drv = new File(own, "drv");
+            if (!elf.canRead() || !env.canRead() || !fs.isDirectory() || fs.list() == null ||
+                    !drv.isDirectory() || drv.list() == null ||
+                    !getString(R.string.elf_sha256).trim().equalsIgnoreCase(sha256(elf))) {
+                String error = "Private game diagnostic refused: app cannot read the staged game/config.";
+                Log.e(TAG, error);
+                return error;
+            }
+            Log.i(TAG, "private game verified: " + elf + ", env sha256 " + sha256(env));
+            return null;
+        }
         try {   /* a build with the game inside unpacks it itself, after this */
             if (Arrays.asList(getAssets().list("")).contains("game.files")) return null;
         } catch (Exception e) { }
