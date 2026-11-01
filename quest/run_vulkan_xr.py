@@ -19,9 +19,9 @@ SERIAL="2G97C5ZJ0G02DQ"
 
 def game_conf(root,game):
     """games/<game>/game.conf is shell; read the variables the runner needs."""
-    script='. "$1"; printf "%s\\0" "$PKG" "$ACTIVITY" "$HEADSET_DIR" "${HEADSET_SUB:-}" "$GAME_PARTS" "$ELF" "$SHA_FILE"'
+    script='. "$1"; printf "%s\\0" "$PKG" "$ACTIVITY" "$HEADSET_DIR" "${HEADSET_SUB:-}" "$GAME_PARTS" "$ELF" "$SHA_FILE" "${LOG:-}"'
     values=subprocess.run(["bash","-c",script,"conf",str(root/"games"/game/"game.conf")],capture_output=True,check=True).stdout.decode().split("\0")
-    keys=("PKG","ACTIVITY","HEADSET_DIR","HEADSET_SUB","GAME_PARTS","ELF","SHA_FILE")
+    keys=("PKG","ACTIVITY","HEADSET_DIR","HEADSET_SUB","GAME_PARTS","ELF","SHA_FILE","LOG")
     return dict(zip(keys,values))
 
 def main():
@@ -39,6 +39,7 @@ def main():
     conf=game_conf(root,args.game)
     ORIGINAL=conf["PKG"];PACKAGE=ORIGINAL+".vulkan";ACTIVITY=conf["ACTIVITY"]
     ELF=conf["ELF"];PARTS=conf["GAME_PARTS"].split()
+    LOG=conf["LOG"] or args.game+".log" # the runtime's log beside the game (GSE: gse.log)
     sdk=Path.home()/"Library/Android/sdk"
     aapt=sorted((sdk/"build-tools").glob("*/aapt2"))[-1]
     badging=subprocess.run([str(aapt),"dump","badging",str(args.apk.resolve())],capture_output=True,text=True,check=True).stdout
@@ -66,7 +67,9 @@ def main():
         return shell("ls","-d",path,check=False).returncode==0
     def original_files():
         result={}
-        for name in ("env.txt",args.game+".log","HOW-TO-ADD-THE-GAME.txt",ELF,*[p for p in PARTS if p!=ELF.split("/")[0]]):
+        # "." (GSE copies its whole folder) is the app's own files directory,
+        # which the app creates itself: not a file the runner must restore.
+        for name in ("env.txt",LOG,"HOW-TO-ADD-THE-GAME.txt",ELF,*[p for p in PARTS if p not in (ELF.split("/")[0],".")]):
             path=own+"/"+name
             if not exists(path):result[name]=None
             elif shell("test","-f",path,check=False).returncode==0:
@@ -166,14 +169,14 @@ def main():
         save("process.txt",shell("ps","-A","-o","PID,NAME,ARGS",check=False))
         save("activity.txt",shell("dumpsys","activity","activities",check=False))
         save("exit-info.txt",shell("dumpsys","activity","exit-info",PACKAGE,check=False))
-        for name in (args.game+".log","capture.ppm","frames.csv","submissions.csv","passes.csv","pipelines.bin.recipes"):
+        for name in (LOG,"capture.ppm","frames.csv","submissions.csv","passes.csv","pipelines.bin.recipes"):
             # exec-out can return zero for a remote cat error; do not save
             # error text as an image, CSV or binary pipeline recipe file.
             if shell("run-as",PACKAGE,"test","-f",private+"/"+name,check=False).returncode:
                 report.setdefault("missing_artifacts",[]).append(name)
                 continue
             result=command("exec-out","run-as",PACKAGE,"cat",private+"/"+name,check=False)
-            if result.returncode==0:(out/("game.log" if name==args.game+".log" else name)).write_bytes(result.stdout)
+            if result.returncode==0:(out/("game.log" if name==LOG else name)).write_bytes(result.stdout)
         with (out/"screen.png").open("wb") as picture:
             subprocess.run([adb,"-s",SERIAL,"exec-out","screencap","-p"],stdout=picture,check=True,timeout=20)
     except Exception as error:
