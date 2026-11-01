@@ -113,7 +113,7 @@ game aims. The world itself fills the headset's whole view.
 scale 1.0        game units per metre (world size)
 screen 3.0       distance of the HUD screen, metres
 aim 15           how far along the laser (metres) the game's shot meets it: the game fires from your head, the laser leaves your gun
-resolution 2280  longer side of each eye's image, pixels
+resolution 2208  each eye's image height, pixels (default: Quest 3's panel, 2064x2208)
 width 2064       each eye's width; 0 keeps the headset's own proportions
 refresh 120      display rate to ask for: 72, 80, 90 or 120 (120 shows each of the game's 60 frames twice, evenly)
 hand right       starting gun hand

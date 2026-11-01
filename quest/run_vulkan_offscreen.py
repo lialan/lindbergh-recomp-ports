@@ -38,7 +38,7 @@ def main():
     parser.add_argument("--frames",type=int,default=4)
     parser.add_argument("--timeout",type=int,default=60)
     parser.add_argument("--width",type=int,default=2064)
-    parser.add_argument("--height",type=int,default=2280)
+    parser.add_argument("--height",type=int,default=2208)  # Quest 3's panel: 2064x2208 per eye
     parser.add_argument("--density",type=float,help="explicit constant FDM diagnostic, (0,1]")
     parser.add_argument("--dual",action="store_true")
     parser.add_argument("--menu",action="store_true")

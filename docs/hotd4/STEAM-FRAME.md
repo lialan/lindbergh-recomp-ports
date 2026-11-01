@@ -7,8 +7,9 @@ OpenXR runtime, built against the Steam Linux Runtime 4 (`steamrt4`, the
 runtime Valve's native-engine guidance targets).
 
 **Status:** runs on a Steam Frame (SteamOS, Turnip Adreno 750, SteamVR's
-OpenXR runtime) at 60 fps, 2064x2280 per eye, with foveation required and
-eye-tracked. Controls, aim, HUD and audio in play are still to be checked.
+OpenXR runtime) at 60 fps, at the panel's own 2160x2160 per eye (the
+build's default; Quest builds default to Quest 3's 2064x2208), with
+foveation required and eye-tracked. Controls, aim, HUD and audio in play are still to be checked.
 
 Two things the Frame needed that no other host did: the launcher uses its
 bundled libraries only where SteamOS has none (its SDL2 is sdl2-compat and
