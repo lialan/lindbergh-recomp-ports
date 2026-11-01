@@ -90,13 +90,21 @@ These are Mac/core bring-up results, not a playable Quest port or a steady
 60 fps claim. The corrected 3,600-frame run's five-second gameplay samples
 range roughly 59.2–60.2 fps on this M4 Pro; loading samples are lower. Validation
 and screenshot readbacks are enabled in this diagnostic, and per-frame tail
-latency, sustained play and other stages still need measurement. The standalone Android Vulkan core pixel suite also passed in the Android XR
-emulator before the macOS-first priority was clarified. An Android loader and
-source-owned NativeActivity probe are compiled and packaged, but the probe has
-not been installed or run. The emulator has been stopped. Game host/JNI
-integration, OpenXR world/overlay integration, shared input wiring, asset conversion, full game-call coverage,
-foveation and on-device acceptance remain pending. Target retirement/resizing
-and pipeline preparation also need complete game-path coverage.
+latency, sustained play and other stages still need measurement. The source-owned
+Android Vulkan core pixel suite also passed on Quest 3 (Adreno 740), covering
+multiview, asynchronous uniform snapshots, persistent geometry, packed textures
+and GPU color/depth copies. A separate native OpenXR probe presented 120
+two-layer frames with required medium foveation at 1680x1760 per eye. Runtime
+logs establish session/foveation bring-up; during-session and post-session
+screencaps are black and do not establish visible scene correctness. Neither test runs a game.
+
+Game host/JNI integration, OpenXR world/overlay integration, shared input
+wiring, full game-call coverage and combat performance acceptance remain
+pending. Target retirement/resizing and pipeline preparation also need
+complete game-path coverage. The reproducible Quest probe runner in
+`lindberghrecomp/tools/vulkan/test_quest_probe.py` holds the shared lock through
+cleanup, tests the core separately, and rejects stale XR logs using a unique
+launch token and fresh process ID.
 
 ## Mac-first work and coordinated Quest access
 
@@ -112,7 +120,8 @@ Installation, launch, screenshots, log collection, app stop and cleanup must
 all complete before the script exits. Every device command must target that
 explicit serial. Do not issue direct ADB outside the wrapper. Status 75 means
 the headset is busy: continue local work and retry later. The wrapper has been
-read and the cooperating thread notified; no headset session was started.
+read and the cooperating thread notified. Completed probe sessions stopped
+only the diagnostic app, disabled proximity automation and released the lock.
 
 Run the shared Mac suite with `scripts/test-vulkan-macos.sh`. It selects
 `/opt/homebrew/share/vulkan/icd.d/kosmickrisp_mesa_icd.aarch64.json` by default,
