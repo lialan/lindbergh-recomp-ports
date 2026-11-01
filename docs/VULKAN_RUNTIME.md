@@ -119,6 +119,10 @@ Run the shared Mac suite with `scripts/test-vulkan-macos.sh`. It selects
 prints the selected ICD and enables Vulkan validation. `VK_DRIVER_FILES` may
 explicitly select another installed path; there is no silent driver fallback.
 
+Combat performance is a release gate: see [VULKAN_PERFORMANCE.md](VULKAN_PERFORMANCE.md)
+for the shared recorder, matched Mac comparisons and still-open Quest/cold-cache
+gates. Average FPS alone is insufficient. All performance diagnostics are opt-in.
+
 Next, extend Mac gameplay/reference coverage (including slow-motion and longer
 runs), cover remaining target/resource lifetime gaps, and bring up HOTD4 using
 the same runtime. Keep these Mac execution gates ahead of standalone Android
