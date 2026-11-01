@@ -128,3 +128,21 @@ Depth/stencil format and copy costs also need device measurement: the reference
 pbuffer uses depth24/stencil8 while the current Vulkan target uses D32/S8.
 Preserve required precision/behavior while selecting efficient supported
 storage; do not assume this difference is free on Quest.
+
+## Live-camera integration follow-up
+
+The shared XR settings/camera foundation is committed and passes Mac core and
+settings tests plus Android compilation. The experimental guest wiring still
+loses world output during final composition: a 3500-frame pbuffer readback
+contains the world, while the final simulated-pose output lacks it. Normal
+desktop composition retains combat geometry. Changing only reconstructed
+depth coefficients or the HUD-lens presentation transform did not resolve it;
+those hypotheses were reverted. Resolve composition before timing acceptance.
+
+A separate performance gap is visible in source: OpenXR swapchain targets
+carry runtime density-map attachments, but the guest world pbuffers currently
+allocate separate targets without them. The native world path must inherit
+compatible foveation (including correct runtime image ownership), with reused
+framebuffers rather than per-frame recreation. Final-swapchain foveation alone
+does not establish foveated world rendering. Verify the actual combat world
+pass and preserve image quality in matched OpenGL/Vulkan device comparisons.
