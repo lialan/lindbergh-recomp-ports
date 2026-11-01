@@ -46,10 +46,24 @@ missing common functionality.
 - Captured 600 reference OpenGL frames of HOTD4 Special: 204 linked programs,
   202 unique pairs. All converted offline with zero compilation failures into
   a 2,848,036-byte local shader archive.
-- HOTD4 Special completes 600 requested frames (601 observed) through
-  KosmicKrisp with the shared worker and Vulkan validation enabled. A captured
-  frame shows the ride-reset instruction panel. This is startup/UI evidence;
-  scripted gameplay and reference-image acceptance remain in progress.
+- HOTD4 Special completes 3,600 requested frames (3,601 observed) through
+  KosmicKrisp with the shared worker and Vulkan validation enabled: ride
+  confirmation, intro playback, stage loading and active combat. Captures show
+  full-color world geometry, enemies, effects and HUD. The OpenGL reference
+  has the same scene layout; animated poses/timing differ, so this is visual
+  bring-up evidence rather than a pixel-exact gameplay acceptance test.
+- The longer OpenGL capture has 205 shader links / 203 unique pairs, including
+  `YUVCompose`, with zero offline compilation failures (2,854,045-byte archive).
+  Streamed movie planes use shared texture subimage uploads with unpack row
+  length, alignment, skip offsets and PBO bounds checks.
+- Fixed grayscale world output: RGBA internal textures allocated with a
+  luminance upload format must retain RGBA storage for later framebuffer
+  copies. `guest_pixels` handles that conversion independently of any game.
+  Full-level GPU color/depth copies skip staging the obsolete CPU pixels.
+- Diagnostic runs exercised 3,000-frame movie/control sequences as well.
+  Native periodic captures use the same `LINDBERGH_SHOT_EVERY` / `FROM`
+  controls as OpenGL. Temporary uniform/copy tracing stays in ignored local
+  diagnostic binaries, not the runtime.
 - Fixed the apparent missing `GetBrightArea.dat` program: the reference and
   runtime sources differed only by an optional final newline. Offline/runtime
   identity normalization now agrees; raw SHA-256 integrity stays unchanged.
@@ -61,32 +75,42 @@ missing common functionality.
 - BGRA8888, RGB565 and BGRA4444 retain packed storage. BGRA4444 uses an
   image-view swizzle, avoiding CPU pixel conversion. Pixel tests check channel
   ordering and alpha on KosmicKrisp.
+- Native pipeline caches now save at drained shutdown and reload at startup.
+  The default is per game under SDL's preferences directory; an explicit
+  `LINDBERGH_VULKAN_CACHE` path overrides it (empty disables persistence).
+  Cold/write/warm-load and default-path startup/shutdown checks pass on
+  KosmicKrisp, including a 145,626-byte diagnostic cache. This is cache
+  persistence evidence, not a measured warm-start speedup.
 - KosmicKrisp validation self-tests pass, including stereo pixels, asynchronous
   uniform snapshots, persistent vertex/index buffers, texture sampling,
   bottom-origin render targets and GPU depth/color copies. The shared default
   OpenGL runtime self-test still passes.
 
-These are Mac/core bring-up results, not a playable Quest port or a 60 fps
-claim. The standalone Android Vulkan core pixel suite also passed in the Android XR
+These are Mac/core bring-up results, not a playable Quest port or a steady
+60 fps claim. The corrected 3,600-frame run's five-second gameplay samples
+range roughly 59.2–60.2 fps on this M4 Pro; loading samples are lower. Validation
+and screenshot readbacks are enabled in this diagnostic, and per-frame tail
+latency, sustained play and other stages still need measurement. The standalone Android Vulkan core pixel suite also passed in the Android XR
 emulator before the macOS-first priority was clarified. An Android loader and
 source-owned NativeActivity probe are compiled and packaged, but the probe has
 not been installed or run. The emulator has been stopped. Game host/JNI
-integration, OpenXR world/overlay
-integration, shared input wiring, asset conversion, full game-call coverage,
+integration, OpenXR world/overlay integration, shared input wiring, asset conversion, full game-call coverage,
 foveation and on-device acceptance remain pending. Target retirement/resizing
 and pipeline preparation also need complete game-path coverage.
 
 ## Device-free work while the headset is unavailable
 
 The user has asked that the headset remain untouched. Continue source work,
-offline captures/conversion and Mac Vulkan pixel/reference checks first. Do not discover, install, launch or inspect the headset until the user
-makes it available again. Device validation remains a separate acceptance step.
+offline captures/conversion and Mac Vulkan pixel/reference checks first. Do not
+discover, install, launch or inspect the headset until the user makes it
+available again. Device validation remains a separate acceptance step.
 
 Run the shared Mac suite with `scripts/test-vulkan-macos.sh`. It selects
 `/opt/homebrew/share/vulkan/icd.d/kosmickrisp_mesa_icd.aarch64.json` by default,
 prints the selected ICD and enables Vulkan validation. `VK_DRIVER_FILES` may
 explicitly select another installed path; there is no silent driver fallback.
 
-Next, reach gameplay with scripted inputs, collect additional offline shader
-variants if required, and compare the game image with OpenGL. Keep the native
-draw/resource mechanisms common before integrating the standalone Android host.
+Next, extend Mac gameplay/reference coverage (including slow-motion and longer
+runs), cover remaining target/resource lifetime gaps, and bring up HOTD4 using
+the same runtime. Keep these Mac execution gates ahead of standalone Android
+integration; Quest/OpenXR acceptance remains pending.
