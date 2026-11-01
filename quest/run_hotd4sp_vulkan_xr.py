@@ -25,6 +25,7 @@ def main():
     parser.add_argument("--apk",type=Path,required=True)
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--seconds",type=int,default=70)
+    parser.add_argument("--set",action="append",default=[],metavar="KEY=VALUE",help="override/add one game environment entry")
     args=parser.parse_args()
     if not 10<=args.seconds<=150:parser.error("watchdog must be 10..150 seconds")
     sdk=Path.home()/"Library/Android/sdk"
@@ -88,13 +89,22 @@ def main():
         transfer=shlex.join(["tar","-C",source,"-cf","-","elf","fs"])+" | "+shlex.join(["run-as",PACKAGE,"tar","-C",private,"-xf","-"])
         save("stage.txt",command("shell",transfer,timeout=180))
         env={"LINDBERGH_AUTOSTART":"8","LINDBERGH_AUTOGUN":"2","LINDBERGH_MUTE":"1","LINDBERGH_GL_THREAD":"1",
-             "LINDBERGH_EXIT_AFTER":"3600","LINDBERGH_XR_SET":"width=2064,resolution=2280,refresh=120,scale=1,screen=3,aim=15,dual=on,fps=on",
+             "LINDBERGH_EXIT_AFTER":"3600",
              "LINDBERGH_VULKAN_CACHE":private+"/pipelines.bin","LINDBERGH_NVRAM":private+"/nvram.bin",
              "LINDBERGH_FRAME_TIMINGS":private+"/frames.csv","LINDBERGH_TIMING_FROM":"0","LINDBERGH_TIMING_TO":"3598",
              "LINDBERGH_VULKAN_SUBMISSION_TIMINGS":private+"/submissions.csv","LINDBERGH_VULKAN_PREPARE_TIMING":"1",
              "LINDBERGH_VULKAN_COMMAND_STATS":"1","LINDBERGH_VULKAN_STATE_FILTER":"1","LINDBERGH_VULKAN_INDEX_REUSE":"1",
              "LINDBERGH_SHOT":private+"/capture.ppm","LINDBERGH_SHOT_FRAME":"120"}
+        for item in args.set:
+            key,_,value=item.partition("=")
+            if not key or not _:raise RuntimeError("--set requires KEY=VALUE")
+            env[key]=value.replace("{private}",private)
         report["environment"]=env
+        # XR settings come from the player's staged elf/vr.cfg, as in the GL
+        # app; --set LINDBERGH_XR_SET=... remains available for one-off runs.
+        cfg=shell("run-as",PACKAGE,"cat",private+"/elf/vr.cfg",check=False)
+        report["vr_cfg"]=cfg.stdout.decode(errors="replace") if cfg.returncode==0 else None
+        (out/"vr.cfg").write_bytes(cfg.stdout if cfg.returncode==0 else b"")
         envfile=out/"env.txt";envfile.write_text("\n".join(k+"="+v for k,v in env.items())+"\n")
         for destination in (private+"/env.txt",private+"/elf/env.txt"):
             with envfile.open("rb") as config:
