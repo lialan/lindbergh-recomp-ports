@@ -320,3 +320,47 @@ uses a separate host readout clock, while actual OpenXR continues using its
 runtime timing. Source-owned tests prevent a fast/slow simulation clock from
 opening the FPS label's measurement window early. Compositor/GPU timing and
 physical VR tests remain required for acceptance.
+
+
+### Cold pipeline preparation confirmed on Quest
+
+Two more whole-lock, private-tree, actual-guest runs completed 3601 frames at
+2064x2280 per eye with dual simulated input and full-rate density attachments.
+Both returned valid distinct stereo captures, removed their private trees and
+preserved both installed HOTD4SP APK hashes. The binary and offline game/fixed
+shader hashes match between these runs. Artifacts are retained under:
+
+- `build-quest-vulkan-offscreen/quest-fdm-game-warm-3600/`
+- `build-quest-vulkan-offscreen/quest-fdm-game-cold-profile-3600/`
+
+The runner now accepts `--prepare-timing`, enabling the existing opt-in native
+preparation profiler. The warm run loads the previous full-combat pipeline
+cache; the cold run supplies no cache. Neither uses OpenXR, its compositor or
+actual runtime foveation maps. The same frame-window numbers do not guarantee
+identical game states: timed loading shifts the first heavy world frame.
+These runs establish a cause, rather than a precise scene-matched speedup.
+
+| Diagnostic, frames 3000-3598 | CPU cadence | p99 interval | Worst interval | Intervals above 33.33 ms |
+| --- | ---: | ---: | ---: | ---: |
+| Cold cache with prepare logging | 53.04 FPS | 32.48 ms | 977.84 ms | 5 |
+| Prior full-combat cache with prepare logging | 59.15 FPS | 29.08 ms | 68.81 ms | 1 |
+
+Cold frame 3062 creates 45 pipelines in 928.415 ms; its presentation-return
+interval is 977.839 ms. Subsequent preparation batches take 124.745 ms for
+four pipelines, 71.184 ms for five and 122.828 ms for four. These account for
+the major combat hitches. The warm first-heavy-world batch also creates
+45 in-process pipeline objects, but driver cache reuse reduces preparation
+to 19.341 ms. A populated driver cache therefore helps substantially but
+still permits a visible first-use spike and does not close the pacing gate.
+
+The next shared renderer work must move known pipeline variants into loading
+and retain their objects before combat. A portable pipeline-recipe catalogue
+should identify offline shader content, vertex inputs, descriptor layouts,
+render-pass compatibility and canonical raster state, then prepare those
+recipes against the current device/driver. Opaque driver caches alone cannot
+be shipped as a cross-device solution. Keep cold-install and warm-launch
+controls, report unexpected combat pipeline misses, and investigate remaining
+warm CPU/GPU cadence separately. Do not hide preparation time by dropping
+transition frames from the acceptance window. Physical OpenXR display timing,
+matched OpenGL quality/performance and sustained combat/thermal validation
+remain required before claiming no Quest regression.
