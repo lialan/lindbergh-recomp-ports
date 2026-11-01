@@ -299,8 +299,9 @@ Artifacts remain under build-mac-vulkan-game/controller-ray-dual-3600.log and
 build-vulkan-reference/hotd4sp-controller-ray-dual-3600.ppm. These are local
 integration checks, not Quest combat or precision-aim acceptance.
 
-The settings/capture overlay, HUD clipping, path-box
-and depth-aware aiming, and special menu/CQC/horizon policies remain open.
+The capture control, HUD clipping, path-box and depth-aware aiming, and
+special game-menu/CQC/horizon policies remain open. Native settings/FPS
+panel integration is described below.
 The current non-HUD aim path uses the configured aim distance until depth
 sampling is ported. Actual runtime/controller binding, world foveation,
 visual quality and sustained combat frame times still require Quest testing.
@@ -353,6 +354,62 @@ The settings item definitions, action cycles, reset confirmation and controller
 ray/panel intersection now live in `runtime/xr_panel.{h,c}`. The established
 OpenGL host uses this policy, and the native Vulkan core links the same policy
 and CPU painter. Android GL linking, pure policy/geometry tests and Mac Vulkan
-core validation pass. This extraction does not yet draw a native Vulkan panel
-or activate native menu actions; that integration remains outstanding. The
+core validation pass. That foundation commit did not draw a native Vulkan panel
+or activate native menu actions; the subsequent integration is described below. The
 policy does no per-frame allocation, file IO or GPU work.
+
+## Native settings and FPS panels
+
+`SettingsPanel` now drives the native render worker from the shared settings
+policy, painter, Touch actions and cabinet controls. Left Menu toggles the
+panel; the offhand upper button held for one second toggles it in single-gun
+mode. Valid controller rays select rows on trigger edges. An open panel
+suppresses game coordinates, shot rays and queued trigger edges while retaining
+the pointing guns. The shared cabinet policy also blocks a previously scheduled
+P2 join Start while the panel is open. Test/Service and coin actions use the
+existing game-thread mailbox.
+
+Sight, laser, gun visibility, hand, dual wield, FPS, distance, HUD pitch and
+credit policy update live. Refresh cycles advertised runtime rates and issues
+an OpenXR request; actual timing remains authoritative. Resolution persists
+for the next launch. Recenter requests the existing anchored-space mechanism.
+Reset retains the two-selection confirmation and calls the existing Android
+Activity restart method. Settings persistence occurs only on a real choice;
+the fake-menu demonstration disables choices and config writes.
+
+The crosshair recognizer is shared with GL in `runtime/xr_sight.h`. It retains
+the existing small-sprite, gun-center, distinct-frame and movement conditions
+before learning P1/P2 textures. Native HUD packet filtering uses that same
+policy and producer-side cabinet coordinates. Unknown HUD sprites remain
+visible. Actual per-game recognition still requires headset gameplay checks.
+
+The native overlay owns two persistent image/descriptor sets (768x752 settings,
+224x48 FPS) and a resident quad, with pipelines prepared before play. Dirty
+pictures upload before game render passes begin. Each visible panel is one
+multiview draw in the adopted final pass; guns draw once over an open menu.
+There are no per-frame descriptor/image/geometry allocations or added GPU
+waits. A closed menu adds no panel draw or image upload. The optional FPS
+label updates its image only when the displayed number changes.
+
+Mac validation and Adreno source-owned tests cover menu selection, hand-change
+trigger ordering, live camera changes, coin/Test delivery, double reset,
+focus loss, suppression of game rays/queued fire, and crosshair learning.
+GPU checks cover top-first texture UV, both eyes, preserved alpha, one shared
+pass, and four draws for four frames. A 45-frame UI/FPS test performs just
+one settings and one FPS upload. Ordinary and density-map cases pass on
+Quest 3's Adreno 740; retained session:
+`build-vulkan-android-core/quest-stereo-core-20261101-011100/`.
+Android GL/native builds and isolated APK packaging pass.
+
+Device-free game checks exit normally without validation errors and show the
+panel over the game with both controller overlays. Artifacts:
+`build-vulkan-reference/hotd4sp-native-panel.png`,
+`build-vulkan-reference/hotd4sp-native-panel-look.png`,
+`build-mac-vulkan-game/native-panel.log` and `native-panel-look.log`.
+The look demonstration uses `LINDBERGH_VULKAN_FAKE_MENU_LOOK=1` with the fake
+eye/controller/menu switches: it turns toward the placed panel after frame
+120 without moving that panel. These checks do not prove physical controller
+interaction, Android restart/refresh/recenter behavior, full game visual
+parity or Quest combat performance. No headed Quest session was run for this
+milestone. Capture controls, remaining aiming/HUD policies, scene-edge gaps,
+color/depth format parity and sustained Quest combat pacing remain open.

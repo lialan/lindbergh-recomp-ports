@@ -186,8 +186,8 @@ runs exercise cabinet input and the game shot-ray bridge. They run with
 validation and diagnostic logging; their FPS logs are not a performance
 comparison. The Android GL game still links after sharing its controls and
 bindings. No claim of actual Touch-controller gameplay, input latency or
-Quest combat performance follows from these tests. Native gun/laser/sight drawing is now implemented; settings panels and
-additional aiming policies are still required before full gameplay acceptance.
+Quest combat performance follows from these tests. Native gun/laser/sight and settings/FPS panel drawing are now implemented;
+physical UI interaction and additional aiming policies still require gameplay acceptance.
 
 ## Overlay runtime-cost checks
 
@@ -244,3 +244,15 @@ The next headed measurement requires a valid tracking/boundary state, stable
 XR focus and actual combat before any FPS/pacing conclusion. A future log
 collector should stream all-buffer logcat from before launch: a bounded
 snapshot can lose early native startup logs to buffer turnover.
+
+## Native settings UI cost boundary
+
+The native settings/FPS panels use persistent images, sampled descriptors and
+quad geometry. The source-owned Adreno test confirms four frames draw one
+panel each in the existing final render pass. A separate 45-frame UI/FPS
+sequence paints/uploads the settings image once and the FPS label once, then
+reuses them; both ordinary and FDM render passes pass. There are no extra
+GPU waits, descriptor allocations or render passes in this path. Real user
+choices still save config and may request a refresh or restart, as on GL;
+those events must remain identifiable in performance captures. This does not
+close the cold-pipeline, full-game FDM or sustained combat acceptance gates.
