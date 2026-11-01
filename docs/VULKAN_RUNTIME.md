@@ -177,3 +177,43 @@ budget. Runtime tests cover stable 120 Hz, phase correction, 60/72/90 Hz,
 period noise and reset behavior. The native host requests supported 120 Hz
 (or 60 Hz), logging the request separately from runtime-reported refresh.
 Do not equate a requested rate or CPU submission cadence with displayed FPS.
+
+## Shared stereo copy and projection work
+
+The native core preserves both eyes in GPU color/depth copies, including
+independently initialized destination layers and explicit eye routing. Both
+layers travel through one copy/blit command. The guest frontend allocates two
+layers for XR pbuffers and propagates their layer count into copied textures;
+full-level copies still skip obsolete CPU uploads.
+
+The offline shader converter lowers 2D sampling, projective sampling, explicit
+LOD and depth comparisons to per-eye array sampling. Static textures retain one
+physical layer and a cached array view. Hardware array-layer clamping selects
+that same static image for either eye; there is no shader texture-size query,
+branch, or duplicate static-image upload. See the [Vulkan sampling rule](https://docs.vulkan.org/spec/latest/chapters/textures.html#textures-unnormalized-to-integer).
+Old mono archives still work on desktop; XR copied arrays require a rebuilt
+archive and fail explicitly if a mono sampler would flatten the result.
+
+The source-owned tests render different eye images, copy and resample them
+through converted guest GLSL, and compare both images and depth layers. These
+pass with validation on KosmicKrisp and on Quest 3's Adreno GPU. All 203 captured
+HOTD4 Special shader pairs compile offline with zero failures. A 5,600-frame
+Mac repeat with the rebuilt archive exits normally, retains full-color world
+and HUD output, and reports no validation errors. Its screenshot is a dialogue
+scene, not a combat-performance measurement.
+
+`stereo_projection.c` now supplies the existing GL world/HUD/pass/fill math to
+both renderers. Direct Vulkan pixel tests use its clip reprojection rather
+than hand-written eye offsets. CPU checks cover head/world-locked HUDs,
+foreground fills, singular-matrix rejection and a truly infinite far plane.
+Finite GL projection arithmetic is retained. The guest's Vulkan draw packets
+still need live camera classification, anchored headset views and the shared
+policy wired into their matrices. XR render-target resolution scaling and
+input/overlay parity also remain open; two-layer storage alone is not a
+finished stereo port or an image-quality/performance acceptance result.
+
+The latest probe collector retains its authenticated START across rolling
+logcat snapshots. An initial run emitted a 120-frame foveated PASS but lost
+its START from the last snapshot; the corrected collector then captured a
+fresh Activity-destruction failure during startup. Neither observation is
+combat validation. Sessions completed cleanup and released the shared lock.
