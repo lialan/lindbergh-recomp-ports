@@ -32,6 +32,7 @@ def main():
     parser.add_argument("--seconds",type=int,default=70)
     parser.add_argument("--interactive",action="store_true",
                         help="normal play for a person: no autoplay/exit/diagnostics; runs until the app exits or OUTPUT/STOP exists")
+    parser.add_argument("--cold-cache",action="store_true",help="delete the persistent pipeline cache first (measure a first launch)")
     parser.add_argument("--set",action="append",default=[],metavar="KEY=VALUE",help="override/add one game environment entry")
     args=parser.parse_args()
     if not args.interactive and not 10<=args.seconds<=150:parser.error("watchdog must be 10..150 seconds")
@@ -105,17 +106,23 @@ def main():
         report["game_directory"]=game_dir
         shell("run-as",PACKAGE,"mkdir","-p",stage)
         workspace_created=True
+        # Compiled pipelines outlive the throwaway workspace, as they do for a
+        # player (the driver rejects a cache from another driver or GPU).
+        cache_dir=app_home+"/files/vulkan-cache"
+        if args.cold_cache:shell("run-as",PACKAGE,"rm","-rf",cache_dir)
+        shell("run-as",PACKAGE,"mkdir","-p",cache_dir)
+        report["pipeline_cache"]=cache_dir+"/pipelines.bin"+(" (cleared)" if args.cold_cache else "")
         transfer=shlex.join(["tar","-C",source,"-cf","-",*PARTS])+" | "+shlex.join(["run-as",PACKAGE,"tar","-C",stage,"-xf","-"])
         save("stage.txt",command("shell",transfer,timeout=180))
         env={"LINDBERGH_AUTOSTART":"8","LINDBERGH_AUTOGUN":"2","LINDBERGH_MUTE":"1","LINDBERGH_GL_THREAD":"1",
              "LINDBERGH_EXIT_AFTER":"3600",
-             "LINDBERGH_VULKAN_CACHE":private+"/pipelines.bin","LINDBERGH_NVRAM":private+"/nvram.bin",
+             "LINDBERGH_VULKAN_CACHE":cache_dir+"/pipelines.bin","LINDBERGH_NVRAM":private+"/nvram.bin",
              "LINDBERGH_FRAME_TIMINGS":private+"/frames.csv","LINDBERGH_TIMING_FROM":"0","LINDBERGH_TIMING_TO":"3598",
              "LINDBERGH_VULKAN_SUBMISSION_TIMINGS":private+"/submissions.csv","LINDBERGH_VULKAN_PREPARE_TIMING":"1",
              "LINDBERGH_VULKAN_COMMAND_STATS":"1","LINDBERGH_VULKAN_STATE_FILTER":"1","LINDBERGH_VULKAN_INDEX_REUSE":"1",
              "LINDBERGH_SHOT":private+"/capture.ppm","LINDBERGH_SHOT_FRAME":"120"}
         if args.interactive:
-            env={"LINDBERGH_GL_THREAD":"1","LINDBERGH_VULKAN_CACHE":private+"/pipelines.bin","LINDBERGH_NVRAM":private+"/nvram.bin"}
+            env={"LINDBERGH_GL_THREAD":"1","LINDBERGH_VULKAN_CACHE":cache_dir+"/pipelines.bin","LINDBERGH_NVRAM":private+"/nvram.bin"}
         for item in args.set:
             key,_,value=item.partition("=")
             if not key or not _:raise RuntimeError("--set requires KEY=VALUE")
@@ -169,14 +176,14 @@ def main():
         save("process.txt",shell("ps","-A","-o","PID,NAME,ARGS",check=False))
         save("activity.txt",shell("dumpsys","activity","activities",check=False))
         save("exit-info.txt",shell("dumpsys","activity","exit-info",PACKAGE,check=False))
-        for name in (LOG,"capture.ppm","frames.csv","submissions.csv","passes.csv","pipelines.bin.recipes"):
+        for name in (LOG,"capture.ppm","frames.csv","submissions.csv","passes.csv","../vulkan-cache/pipelines.bin.recipes"):
             # exec-out can return zero for a remote cat error; do not save
             # error text as an image, CSV or binary pipeline recipe file.
             if shell("run-as",PACKAGE,"test","-f",private+"/"+name,check=False).returncode:
                 report.setdefault("missing_artifacts",[]).append(name)
                 continue
             result=command("exec-out","run-as",PACKAGE,"cat",private+"/"+name,check=False)
-            if result.returncode==0:(out/("game.log" if name==LOG else name)).write_bytes(result.stdout)
+            if result.returncode==0:(out/("game.log" if name==LOG else name.rsplit("/",1)[-1])).write_bytes(result.stdout)
         with (out/"screen.png").open("wb") as picture:
             subprocess.run([adb,"-s",SERIAL,"exec-out","screencap","-p"],stdout=picture,check=True,timeout=20)
     except Exception as error:
