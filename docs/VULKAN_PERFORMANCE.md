@@ -517,3 +517,55 @@ recording CPU tail. GPU cost is effectively unchanged. The source change
 removes demonstrated redundant work and preserves tested output, while the
 no-regression/smooth-combat gate remains open pending stronger scene-matched,
 uninstrumented and actual OpenXR measurements.
+
+
+### Persistent static EBOs avoid repeated index expansion and uploads
+
+The actual Mac game completed 3601 frames under KosmicKrisp validation,
+exercising 283822 native EBO draws and a live range cache with 280034 hits
+versus 3788 scans. Core GPU tests cover cached uint16 bounds across 12 frames,
+unaligned CPU decoding, revision/storage changes and overflow/truncation.
+Dedicated staging tests force both exhausted and undersized ring arenas,
+plus explicit bulk staging, and preserve both stereo eyes with one submission.
+
+Quest native-index and expansion controls used an identical library
+SHA-256 `cda8c5a0acec069c549a4a4e4543c608cd206c45d34a53aaec98fb676e5360cd`,
+262-entry seed, command filtering, 2064x2280 per eye, full-rate FDM, dual
+simulated guns, submission profiling and command counters. Both completed
+3601 frames with zero first-use pipelines. Both returned valid distinct
+stereo images, removed their private UUID trees and preserved installed APK
+hashes. Both native-index combat images were inspected: street geometry,
+textures, HUD, enemies, subtitle and guns remain visible. Artifacts:
+`build-quest-vulkan-offscreen/quest-index-reuse-{on,off}-3600/` and aggregate
+`build-quest-vulkan-offscreen/index-reuse-comparison.json`.
+
+| Measurement | Expansion control | Native static EBOs |
+| --- | ---: | ---: |
+| Native indexed draws, whole run | 0 | 338648 |
+| Expanded indexed draws, whole run | 398592 | 89851 |
+| Expanded index bytes, whole run | 296204412 | 12993276 |
+| Combat renderer CPU mean | 8.01 ms | 8.03 ms |
+| Combat renderer CPU p99 | 13.00 ms | 12.15 ms |
+| Combat GPU span mean | 14.33 ms | 14.66 ms |
+| Combat upload arena/dedicated bytes mean | 2.24 MiB | 1.93 MiB |
+| CPU presentation cadence | 59.65 FPS | 59.55 FPS |
+| CPU interval p99 / maximum | 27.80 / 53.46 ms | 26.21 / 43.69 ms |
+
+The native run records 334860 range-cache hits and only 3788 scans, rather
+than decoding every native indexed draw. The expansion counter excludes
+one-time typed EBO loading; submission upload accounting includes dedicated
+staging bytes. Expanded bytes per indexed draw fall from about 743 to 30 in
+these observations. The controls have different indexed draw counts
+(398592 versus 428499), loading/gameplay phases and uncontrolled clock/thermal
+history, with another agent using the device between them. This proves the
+path is exercised and repeated work is removed; it is not a formal matched
+scene FPS improvement or a no-regression acceptance result. GPU cost remains
+roughly 14-15 ms on average and transition spikes remain. Actual acquired-map
+OpenXR foveation, uninstrumented sustained combat, physical controls/display
+and a matched-quality OpenGL comparison remain open gates.
+
+The normal Vulkan/OpenXR APK also builds with the current native library and
+262-entry seed. Archive inspection confirms the exact staged native library
+and seed bytes and no host GL imports. APK SHA-256:
+`621fe53a4dee28d43bb6b94992e21fb15f5cf4055e5cdf1bfce5f1e78d6e1e93`.
+It was not installed or physically accepted in this milestone.

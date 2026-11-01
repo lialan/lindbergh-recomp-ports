@@ -661,3 +661,47 @@ produces byte-identical left and right images; retained evidence is
 The normal Vulkan/OpenXR native library also compiles. Quest comparison data
 is recorded in the performance document; physical XR/controller/display and
 all-title acceptance remain separate open gates.
+
+
+## Persistent static element buffers
+
+The shared guest frontend now preserves aligned unsigned-16/unsigned-32
+static EBO storage for native point, line, line-strip, triangle, strip and
+fan draws. `GuestIndexRanges` caches maximum-index bounds by buffer identity,
+byte size, revision, offset, count and type. Byte-range bounds are checked before cache lookup; index-value overflow is
+rejected when scanning a new range. A new revision/storage identity invalidates the cache;
+metadata is bounded to 1024 ranges per buffer. Constant-width decoders support
+unaligned CPU storage without invoking a variable-width memcpy per element.
+Small index lists remain available to the HUD/composite classifiers.
+
+Static EBOs with initial data upload when the guest supplies BufferData,
+moving allocation/copy work into loading. Draw packets bind the resident
+index buffer with its original type and offset. Rewritten/streaming buffers,
+byte indices, unaligned native offsets, client indices and legacy line-loop,
+quad/quad-strip/polygon lowering retain the previous expansion/upload path.
+Any new API that mutates a guest buffer shadow must preserve the existing
+revision contract. Index GPU resources use the existing versioned geometry
+ownership and frame-fence retention.
+
+Bulk EBO loading uses dedicated coherent host staging so it cannot consume
+the fixed per-frame arena needed by later client arrays and uniforms. The
+same geometry helper falls back to fence-retained dedicated staging if an
+ordinary geometry upload exceeds the arena or its remaining capacity. These
+paths add neither an intermediate submission nor an extra GPU wait. Dedicated
+bytes are included in optional upload timing counters. GPU tests force both
+arena exhaustion and larger-than-arena uploads, plus explicit bulk staging,
+and verify both stereo eyes and a single submission.
+
+`LINDBERGH_VULKAN_INDEX_REUSE=0` restores the expansion comparison path,
+including deferred EBO upload timing. The offscreen runner exposes
+`--index-reuse on|off`. With command statistics enabled, shutdown reports
+native and expanded draw counts, expanded bytes and the live EBO range
+cache hit/scan counts. No title-specific rendering code is involved.
+
+Mac CPU/GPU validation passes revision changes, storage replacement, truncated
+ranges, unaligned decoding, index overflow, native primitive eligibility and
+12-frame reuse of an immutable uint16 EBO. The actual Mac game completed
+3601 frames with 283822 native index draws, 280034 cache hits and 3788 scans,
+without validation messages. Artifacts are retained under
+`build-mac-vulkan-offscreen/index-native-game-3600.*`. Quest evidence and
+performance limits are recorded in the performance document.
