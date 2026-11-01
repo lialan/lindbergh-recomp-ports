@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static unsigned capture_serial;
@@ -43,6 +45,12 @@ static void capture_link(GLuint program)
     glLinkProgram(program);
     const char *dir = getenv("LINDBERGH_SHADER_CAPTURE");
     if (!dir || !*dir) return;
+    // A missing destination must not silently produce an empty capture.
+    struct stat info;
+    if ((mkdir(dir, 0755) && errno != EEXIST) || stat(dir, &info) || !S_ISDIR(info.st_mode)) {
+        fprintf(stderr, "[shader-capture] invalid output directory: %s\n", dir);
+        abort();
+    }
     GLint linked = 0;
     glGetProgramiv(program, GL_LINK_STATUS, &linked);
     GLuint attached[16], vertex = 0, fragment = 0;
