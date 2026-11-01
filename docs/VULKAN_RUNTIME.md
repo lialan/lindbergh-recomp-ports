@@ -217,3 +217,24 @@ logcat snapshots. An initial run emitted a 120-frame foveated PASS but lost
 its START from the last snapshot; the corrected collector then captured a
 fresh Activity-destruction failure during startup. Neither observation is
 combat validation. Sessions completed cleanup and released the shared lock.
+
+## Shared live-camera policy foundation
+
+The shared settings parser now supplies the same vr.cfg precedence, 2064x2280
+default eye size and 120 Hz request to both renderers. GL and native Vulkan
+also share pose rotation, draw classification and bounded offscreen target
+scaling. The Vulkan camera policy publishes poses once per frame and caches
+world/HUD transforms, avoiding repeated camera inversions for matching draws.
+Its tests exercise head locking, dominant lenses, zoom persistence, bounds
+reads from CPU VBO shadows and the 1024-pixel offscreen scaling cap.
+
+The native OpenXR host can anchor views, honor configured resolution and
+request sustained CPU performance and renderer-thread registration. Requests
+are logged separately from runtime acceptance. Mac Vulkan pixel/runtime tests,
+three settings tests and Android GL/Vulkan compilation pass. Live headset
+validation of these additions remains pending.
+
+Guest live-camera wiring is still a separate working-tree experiment: a
+3600-frame normal desktop run retains combat geometry, while simulated-pose
+output loses the world during composition. The experiment is not a completed
+stereo port or a performance result. Resolve this before Quest combat timing.
