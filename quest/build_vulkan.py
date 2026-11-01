@@ -97,6 +97,10 @@ def main():
                     for line in config if line.startswith('SHA_FILE='))
     sha_file = root/'games'/args.game/'generated'/sha_name
     if not sha_file.is_file(): parser.error('missing lifted ELF hash: '+str(sha_file))
+    # quest/build.sh (the OpenGL build) copies SDL's Java into the module; this
+    # build adds it from SDL's tree (sdlJavaDir), so a leftover copy duplicates
+    # every class. The copy is generated and gitignored.
+    shutil.rmtree(root/'quest'/args.game/'src/main/java/org/libsdl', ignore_errors=True)
     run(root/'quest/gradlew', '-p', root/'quest', ':'+args.game+':assembleDebug', '--offline',
         '-PnativeRenderer=vulkan', '-PnativeLibsDir='+str(libs.parent), '-PnativeAssetsDir='+str(assets.parent),
         '-PsdlJavaDir='+str(deps/'SDL2-2.32.10/android-project/app/src/main/java'),
