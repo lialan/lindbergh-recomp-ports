@@ -1,8 +1,9 @@
 # Shared direct Vulkan runtime
 
 Development continues on `work/hotd4-steam-frame`; the branch name is
-historical. The game order is HOTD4 Special on Quest 3, HOTD4, Ghost Squad
-Evolution, then Let's Go Jungle. Zink is paused separately on
+historical. Establish macOS game execution through Mesa KosmicKrisp first.
+Then validate HOTD4 Special on Quest 3, HOTD4, Ghost Squad Evolution, and
+Let's Go Jungle. Zink is paused separately on
 `work/hotd4-zink`, with its unresolved black-view state documented there.
 
 The renderer consumes the existing guest graphics ABI. It creates no host GL
@@ -45,17 +46,32 @@ missing common functionality.
 - Captured 600 reference OpenGL frames of HOTD4 Special: 204 linked programs,
   202 unique pairs. All converted offline with zero compilation failures into
   a 2,848,036-byte local shader archive.
-- HOTD4 Special runs 12 requested native Vulkan frames with the worker (13
-  observed), with no validation messages or shutdown failure. A longer run
-  stops explicitly on a missing offline program variant while loading
-  `GetBrightArea.dat`; that gate remains open.
-- MoltenVK validation self-tests pass, including stereo pixels, asynchronous
+- HOTD4 Special completes 600 requested frames (601 observed) through
+  KosmicKrisp with the shared worker and Vulkan validation enabled. A captured
+  frame shows the ride-reset instruction panel. This is startup/UI evidence;
+  scripted gameplay and reference-image acceptance remain in progress.
+- Fixed the apparent missing `GetBrightArea.dat` program: the reference and
+  runtime sources differed only by an optional final newline. Offline/runtime
+  identity normalization now agrees; raw SHA-256 integrity stays unchanged.
+- Added deferred shader/program deletion, detach, float-vector attributes,
+  secondary-color arrays, 2x2/3x3 uniforms and multidraw packet recording.
+- Guest `glFlush` now submits without a GPU wait or presenting/reacquiring the
+  image. `glFinish` waits for the latest submission. A source-owned swapchain
+  test exercises more partial submissions than ring slots before presenting.
+- BGRA8888, RGB565 and BGRA4444 retain packed storage. BGRA4444 uses an
+  image-view swizzle, avoiding CPU pixel conversion. Pixel tests check channel
+  ordering and alpha on KosmicKrisp.
+- KosmicKrisp validation self-tests pass, including stereo pixels, asynchronous
   uniform snapshots, persistent vertex/index buffers, texture sampling,
   bottom-origin render targets and GPU depth/color copies. The shared default
   OpenGL runtime self-test still passes.
 
 These are Mac/core bring-up results, not a playable Quest port or a 60 fps
-claim. Direct Vulkan Android host/JNI integration, OpenXR world/overlay
+claim. The standalone Android Vulkan core pixel suite also passed in the Android XR
+emulator before the macOS-first priority was clarified. An Android loader and
+source-owned NativeActivity probe are compiled and packaged, but the probe has
+not been installed or run. The emulator has been stopped. Game host/JNI
+integration, OpenXR world/overlay
 integration, shared input wiring, asset conversion, full game-call coverage,
 foveation and on-device acceptance remain pending. Target retirement/resizing
 and pipeline preparation also need complete game-path coverage.
@@ -63,10 +79,14 @@ and pipeline preparation also need complete game-path coverage.
 ## Device-free work while the headset is unavailable
 
 The user has asked that the headset remain untouched. Continue source work,
-offline captures/conversion, Mac Vulkan pixel/reference checks and Android
-builds. Do not discover, install, launch or inspect the headset until the user
+offline captures/conversion and Mac Vulkan pixel/reference checks first. Do not discover, install, launch or inspect the headset until the user
 makes it available again. Device validation remains a separate acceptance step.
 
-Next, collect missing shader identities and bindings without adding a runtime
-compiler, extend the source-owned render tests, and advance HOTD4 Special's
-native draw/resource path before integrating the standalone Android host.
+Run the shared Mac suite with `scripts/test-vulkan-macos.sh`. It selects
+`/opt/homebrew/share/vulkan/icd.d/kosmickrisp_mesa_icd.aarch64.json` by default,
+prints the selected ICD and enables Vulkan validation. `VK_DRIVER_FILES` may
+explicitly select another installed path; there is no silent driver fallback.
+
+Next, reach gameplay with scripted inputs, collect additional offline shader
+variants if required, and compare the game image with OpenGL. Keep the native
+draw/resource mechanisms common before integrating the standalone Android host.
