@@ -144,10 +144,30 @@ and HUD output without validation errors. Both eyes still travel through the
 GPU-copy/array-sampling path; no effects are skipped. This is local correctness
 evidence, not Quest performance acceptance.
 
-A separate performance gap is visible in source: OpenXR swapchain targets
-carry runtime density-map attachments, but the guest world pbuffers currently
-allocate separate targets without them. The native world path must inherit
-compatible foveation (including correct runtime image ownership), with reused
-framebuffers rather than per-frame recreation. Final-swapchain foveation alone
-does not establish foveated world rendering. Verify the actual combat world
-pass and preserve image quality in matched OpenGL/Vulkan device comparisons.
+World pbuffers initially had no density-map attachment despite a foveated
+OpenXR swapchain. They now pre-create framebuffer variants for the runtime's
+maps and select the acquired image's map once per frame. A separately owned,
+immutable full-rate map is used before acquisition or while unfocused; scratch
+rendering never borrows an unacquired runtime map. Its one-time initialization
+wait is outside gameplay. Frame selection adds no allocation, upload or GPU
+wait. Small offscreen targets retain the existing GL size cap.
+
+The source-owned test alternates full-rate/coarse maps across asynchronous
+stereo draws, checks pixels in both eyes, verifies handle reuse and rejects an
+unprepared map. It passes on Quest 3's Adreno 740, including the production
+constant-map resource helper. Evidence is retained in
+build-vulkan-android-core/quest-stereo-core-20261101-010615/. Mac tests pass
+with validation, explicitly skipping FDM because KosmicKrisp lacks it. Native
+Android game/APK builds pass. The bounded game-host launch ended before any
+native renderer log appeared, so actual game world-pass activation and combat
+performance remain unverified. The app was stopped, experiment env files
+restored, automation disabled and the shared device lock released. Do not
+infer a graphics crash or successful game foveation from that launch.
+
+The runtime density images are paired with their corresponding swapchain
+images by [XR_FB_foveation_vulkan](https://registry.khronos.org/OpenXR/specs/1.1/man/html/XrSwapchainImageFoveationVulkanFB.html).
+The density attachment retains the required DONT_CARE store operation from
+[VkRenderPassFragmentDensityMapCreateInfoEXT](https://docs.vulkan.org/refpages/latest/refpages/source/VkRenderPassFragmentDensityMapCreateInfoEXT.html).
+Verify the actual combat world pass and preserve image quality in matched
+OpenGL/Vulkan device comparisons. Final-swapchain foveation alone is not a
+performance acceptance result.

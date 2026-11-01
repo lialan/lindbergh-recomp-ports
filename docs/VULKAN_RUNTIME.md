@@ -208,7 +208,7 @@ than hand-written eye offsets. CPU checks cover head/world-locked HUDs,
 foreground fills, singular-matrix rejection and a truly infinite far plane.
 Finite GL projection arithmetic is retained. The guest draw packets now use live camera classification and cached
 transforms, with anchored headset views and shared target-resolution scaling.
-Input/overlay parity, HUD clipping and world-pass foveation remain open; this
+Input/overlay parity, HUD clipping and game world-pass foveation validation remain open; this
 is not a finished stereo port or a Quest performance acceptance result.
 
 The latest probe collector retains its authenticated START across rolling
@@ -239,9 +239,26 @@ pbuffer and a two-layer identity-transform control retained it. Full-frame
 copy composites now retain guest clip space instead of receiving a second
 camera transform. A 3600-frame simulated-pose repeat retains combat geometry
 and HUD without validation errors. This remains Mac correctness evidence;
-Quest input/overlay, world-pass foveation and combat acceptance are pending.
+Quest input/overlay, game world-pass foveation validation and combat acceptance are pending.
 
 Diagnostic captures can select a guest drawable with
 LINDBERGH_VULKAN_SHOT_DRAWABLE=<id>. Such captures are explicitly logged as
 intermediate targets, not final display output. Keep this and classification
 logging disabled during performance comparisons.
+
+## Shared foveated world attachments
+
+Full-eye world pbuffers now reuse prepared framebuffer variants with the
+current acquired OpenXR image's density-map view. The same color/depth storage,
+render passes and pipeline objects persist; frame changes select a handle.
+An owned full-rate density map covers unfocused scratch rendering without
+using an unacquired runtime resource. The shared ConstantDensityMap helper
+initializes once and completes its upload before publishing a static view.
+No density-map upload, framebuffer allocation or additional GPU wait is added
+to the per-frame path. Non-world targets keep their existing bounded sizing.
+
+Quest headless pixel tests pass with the production map helper and alternating
+maps across asynchronous two-eye draws. Mac validation/core tests and Android
+game/APK builds pass. The latest bounded game launch produced no native log,
+so live world-pbuffer activation, visual quality and combat performance remain
+open. See VULKAN_PERFORMANCE.md for evidence and measurement requirements.
