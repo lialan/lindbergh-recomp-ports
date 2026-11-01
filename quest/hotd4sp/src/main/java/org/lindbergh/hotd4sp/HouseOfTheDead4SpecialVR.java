@@ -56,6 +56,22 @@ public class HouseOfTheDead4SpecialVR extends SDLActivity {
 
     private String checkGame() {
         File own = getExternalFilesDir(null);
+        // Diagnostics must never silently run against the player's shared tree.
+        // Check in the real app process: shell-readable storage is insufficient.
+        if (getIntent().getBooleanExtra("lindbergh.require_private_game", false)) {
+            File elf = own == null ? null : new File(own, "elf/hod4M.elf");
+            File env = own == null ? null : new File(own, "elf/env.txt");
+            File fs = own == null ? null : new File(own, "fs");
+            if (elf == null || !elf.canRead() || !env.canRead() ||
+                    !fs.isDirectory() || fs.list() == null ||
+                    !getString(R.string.elf_sha256).trim().equalsIgnoreCase(sha256(elf))) {
+                String error = "Private game diagnostic refused: app cannot read the staged game/config.";
+                Log.e(TAG, error);
+                return error;
+            }
+            Log.i(TAG, "private game verified: " + elf + ", env sha256 " + sha256(env));
+            return null;
+        }
         try {   /* a build with the game inside unpacks it itself, after this */
             if (Arrays.asList(getAssets().list("")).contains("game.files")) return null;
         } catch (Exception e) { }

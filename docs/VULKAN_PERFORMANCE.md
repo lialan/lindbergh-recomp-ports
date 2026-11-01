@@ -25,6 +25,12 @@ the report and correlate them with game events, GPU work and compositor data.
 Use GPU/compositor evidence and a headset visual check for display pacing.
 CPU submission cadence is one diagnostic, not proof of headset delivery.
 
+A stable 60 FPS game also needs compatible display cadence. On Quest, verify
+the runtime actually enters 120 Hz for the intended two-refresh-per-game-frame
+delivery; a 120 Hz request or a 60 FPS CPU average is insufficient. A 90 Hz
+runtime can produce uneven display intervals for a 60 FPS game. Do not accept
+that configuration as smooth delivery without compositor evidence.
+
 ## Shared CPU boundary recorder
 
 Both the OpenGL and Vulkan paths in `host_sdl.c` use the same opt-in recorder.
@@ -83,6 +89,23 @@ the wrapper. Status 75 means continue local work and retry later. Use an
 app-writable trace destination and collect the finished file within the lock.
 
 ## Current gate
+
+The latest bounded headed APK diagnostic created the native Vulkan/OpenXR
+swapchain and loaded 262 pipeline recipes, but remained in IDLE after losing
+window focus. Its shell-staged private assets were not readable by the app,
+which selected the shared game tree instead. Reject this attempt as a
+private-tree or combat performance result. Cleanup restored the experimental
+app's backed-up files and verified the original GL APK hash unchanged; this
+does not establish that the shared game tree was untouched.
+
+`quest/run_hotd4sp_vulkan_xr.py` now installs before staging, requires an
+app-UID ELF/config hash check before launch, and uses the Activity's
+`lindbergh.require_private_game` diagnostic guard. The guard checks the ELF,
+config and filesystem from the real app process and refuses shared-path
+fallback. The collector additionally requires fresh private-path evidence.
+The rebuilt APK compiles; successful private staging and focused rendering
+still require a new coordinated device run. This is a correctness diagnostic,
+not an uninstrumented performance benchmark.
 
 The native Quest game host/OpenXR integration is still incomplete. The shared
 Android game library and isolated APK build now link with no GL/EGL imports;
