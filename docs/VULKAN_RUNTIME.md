@@ -98,12 +98,21 @@ integration, OpenXR world/overlay integration, shared input wiring, asset conver
 foveation and on-device acceptance remain pending. Target retirement/resizing
 and pipeline preparation also need complete game-path coverage.
 
-## Device-free work while the headset is unavailable
+## Mac-first work and coordinated Quest access
 
-The user has asked that the headset remain untouched. Continue source work,
-offline captures/conversion and Mac Vulkan pixel/reference checks first. Do not
-discover, install, launch or inspect the headset until the user makes it
-available again. Device validation remains a separate acceptance step.
+Continue source work, offline conversion and Mac Vulkan pixel/reference
+checks first. The user subsequently made Quest access available through a
+shared exclusive lock with the other Codex thread. Device validation remains
+a separate acceptance step.
+
+For Quest serial `2G97C5ZJ0G02DQ`, run the **entire** device test script through
+`python3 ~/.local/bin/quest3-lock bash /tmp/my-quest-test.sh`. The wrapper holds
+`fcntl.flock` on `/tmp/quest3-2G97C5ZJ0G02DQ.lock`; never delete that file.
+Installation, launch, screenshots, log collection, app stop and cleanup must
+all complete before the script exits. Every device command must target that
+explicit serial. Do not issue direct ADB outside the wrapper. Status 75 means
+the headset is busy: continue local work and retry later. The wrapper has been
+read and the cooperating thread notified; no headset session was started.
 
 Run the shared Mac suite with `scripts/test-vulkan-macos.sh`. It selects
 `/opt/homebrew/share/vulkan/icd.d/kosmickrisp_mesa_icd.aarch64.json` by default,
