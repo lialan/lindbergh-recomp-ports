@@ -110,8 +110,10 @@ The isolated HOTD4 Special experiment boots guest shaders on Adreno and creates
 the foveated swapchain. Initial runs stayed at XR IDLE. After stopping our stale
 Zink diagnostic, the native game reached READY, VISIBLE and FOCUSED, acquired
 its first game target, and received a runtime-confirmed 90 -> 120 Hz change.
-The session lost focus and stopped roughly two seconds later. These startup
-logs do not establish sustained game rendering or combat performance. World reprojection, per-eye offscreen copies, overlays, input parity
+The session lost focus and stopped roughly two seconds later. An early-frame
+capture retry did not produce a live game PID; exit-info contained only prior
+force-stop cleanup records, and no fresh crash record established its cause.
+These startup logs do not establish sustained game rendering or combat performance. World reprojection, per-eye offscreen copies, overlays, input parity
 and full game-call coverage remain pending. Target retirement/resizing and pipeline preparation also need
 complete game-path coverage. The reproducible Quest probe runner in
 `lindberghrecomp/tools/vulkan/test_quest_probe.py` holds the shared lock through
