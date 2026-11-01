@@ -364,3 +364,44 @@ warm CPU/GPU cadence separately. Do not hide preparation time by dropping
 transition frames from the acceptance window. Physical OpenXR display timing,
 matched OpenGL quality/performance and sustained combat/thermal validation
 remain required before claiming no Quest regression.
+
+
+### Portable prewarming removes the large cold combat compilation stalls
+
+The shared renderer now captures portable pipeline recipes and prepares and
+retains their actual objects before target use. An actual HOTD4SP cold run
+recorded 260 entries (61,860 bytes); a subsequent run supplied that seed with
+**no initial opaque driver-cache file**. Both used 2064x2280 per eye, full-rate
+FDM attachments, dual simulated gun input and the actual guest/queue/renderer.
+The seed run retained 197 final-target and 63 world-pbuffer pipelines before
+use. Its shader-record path reported **zero first-use creations across all
+3601 completed frames**. Preparation logs show no new pipelines in the combat
+window. The separate basic colored renderer creates its few pipelines during
+startup and is not included in the catalogue counter.
+
+| Frames 3000-3598, including transition | CPU cadence | p99 interval | Worst interval |
+| --- | ---: | ---: | ---: |
+| Cold recipe-recording run | 53.10 FPS | 33.05 ms | 984.17 ms |
+| Cold cache path, portable seed | 59.74 FPS | 26.90 ms | 49.49 ms |
+
+Artifacts: `build-quest-vulkan-offscreen/quest-recipes-record-3600/` and
+`quest-recipes-seed-cold-3600/`. The seed SHA-256 is
+`0510b1da0723e26b2769006cef2f8fadb3beea12e9db2915442b78ec2b4f541e`.
+The seed test uses a later binary containing callback-lifetime protection;
+recorded binaries, compiler flags, environment and shader hashes are in each
+report. Gameplay/transition frames shift with timed loading, so this is not a
+claim of a precisely identical scene or a formal backend speedup. Both runs
+returned valid distinct stereo images, cleaned their private trees and
+preserved installed APK hashes. Both seed-run combat images were inspected:
+street geometry, textures, HUD, enemies and the two native guns remain visible.
+
+The large compilation stalls in this observed sequence are gone. Residual
+unevenness remains: eight CPU intervals exceed 25 ms and three exceed
+33.33 ms, with a 49.49 ms worst interval. There is no pipeline-preparation miss
+at those frames; resource preparation, GPU work and scheduling need separate
+measurement. The current seed covers startup and this early combat sequence,
+not every level or control path. Physical OpenXR/compositor timing, sustained
+combat, thermal behavior and a matched-quality OpenGL comparison remain open.
+The normal Vulkan/OpenXR APK builds with the seed, and archive inspection
+confirms the exact seed and staged native library are packaged; that APK has
+not been installed or physically accepted as part of this milestone.

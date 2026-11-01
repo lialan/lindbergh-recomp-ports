@@ -27,6 +27,8 @@ def main():
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--pipeline-cache",type=Path,help="optional same-device cache from an earlier diagnostic")
     parser.add_argument("--prepare-timing",action="store_true",help="log native pipeline preparation time and creation counts")
+    parser.add_argument("--pipeline-recipes",type=Path,help="portable pipeline seed; opaque driver cache remains cold unless separately supplied")
+    parser.add_argument("--no-recipes",action="store_true",help="disable recipe collection/preparation for a diagnostic control")
     parser.add_argument("--timing-from",type=int,default=0)
     parser.add_argument("--game",default="/sdcard/HouseOfTheDead4Special")
     parser.add_argument("--frames",type=int,default=4)
@@ -53,6 +55,8 @@ def main():
     hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     hashes.update({name:hashlib.sha256(p.read_bytes()).hexdigest() for name,p in shaders.items()})
     if args.pipeline_cache:hashes["initial_pipeline_cache"]=hashlib.sha256(args.pipeline_cache.read_bytes()).hexdigest()
+    if args.pipeline_recipes:hashes["pipeline_recipe_seed"]=hashlib.sha256(args.pipeline_recipes.read_bytes()).hexdigest()
+    if args.no_recipes and args.pipeline_recipes:parser.error("recipe seed conflicts with --no-recipes")
     adb=str(Path.home()/"Library/Android/sdk/platform-tools/adb")
     remote="/data/local/tmp/lindbergh-offscreen-"+uuid.uuid4().hex
     executable=remote+"/hotd4sp_vulkan_offscreen"
@@ -80,6 +84,8 @@ def main():
          "LINDBERGH_FRAME_TIMINGS":remote+"/frames.csv","LINDBERGH_TIMING_FROM":str(args.timing_from),"LINDBERGH_TIMING_TO":str(args.frames-2)}
     if args.density is not None:env["LINDBERGH_VULKAN_OFFSCREEN_DENSITY"]=str(args.density)
     if args.prepare_timing:env["LINDBERGH_VULKAN_PREPARE_TIMING"]="1"
+    if args.pipeline_recipes:env["LINDBERGH_VULKAN_RECIPES_SEED"]=remote+"/seed.lvpr"
+    if args.no_recipes:env["LINDBERGH_VULKAN_RECIPES"]=""
     if args.menu:env.update(LINDBERGH_VULKAN_FAKE_MENU="1",LINDBERGH_VULKAN_FAKE_MENU_LOOK="1")
     report={"serial":SERIAL,"scope":"Actual guest/shared Vulkan diagnostics; no XR, compositor or VR performance acceptance",
             "binary_hashes":hashes,"environment":env,"requested_frames":args.frames,"source":args.game,
@@ -108,6 +114,7 @@ def main():
         for path in files:command("push",path,remote+"/"+path.name)
         for name,path in shaders.items():command("push",path,remote+"/"+name)
         if args.pipeline_cache:command("push",args.pipeline_cache,remote+"/pipeline-cache.bin")
+        if args.pipeline_recipes:command("push",args.pipeline_recipes,remote+"/seed.lvpr")
         shell("chmod","700",executable)
         script=output/"run.sh"
         script.write_text("set -eu\ncd "+shlex.quote(remote+"/game/elf")+"\n"+
@@ -122,7 +129,7 @@ def main():
         text=(output/"game.log").read_text(errors="replace")
         reached=[int(n) for n in re.findall(r"LINDBERGH_EXIT_AFTER: (\d+) frames done",text)]
         report.update(exit_code=process.returncode,reached_frame_limit=bool(reached and max(reached)>=args.frames))
-        for name in ("capture.ppm","capture.right.ppm","frames.csv","pipeline-cache.bin"):
+        for name in ("capture.ppm","capture.right.ppm","frames.csv","pipeline-cache.bin","pipeline-cache.bin.recipes"):
             command("pull",remote+"/"+name,output/name,check=False)
         report["artifacts"]={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in output.iterdir() if p.is_file() and p.name.endswith((".ppm",".csv"))}
         report["eye_images"]={}

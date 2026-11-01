@@ -534,3 +534,59 @@ controller accuracy, runtime foveation-map acquisition, headset display
 correctness, audio output, thermal stability or VR/combat pacing acceptance.
 The first measured combat window contains large stalls, detailed in the
 performance document; that gate remains open.
+
+
+## Portable pipeline recipes and retained preparation
+
+The shared `PipelineRecipes` helper captures only descriptions of observed
+native pipelines, not game resources, shader code or opaque driver binaries.
+Its `LVPREC1` file contains little-endian records with compiled shader-content
+identities, vertex bindings/attributes, target compatibility and canonical
+raster keys, protected by a SHA-256 checksum. Shader identities include both
+SPIR-V modules and the archive record key. Bounds, counts, canonical state,
+vertex-input limits and format support are checked before creating pipelines.
+Corrupt files are ignored atomically; records for changed or absent compiled
+shaders are skipped. Changing the recipe ABI requires a version bump.
+
+With a nonempty normal driver-cache path, the default writable catalogue is
+`<cache path>.recipes`. `LINDBERGH_VULKAN_RECIPES` overrides that path; an empty
+path disables collection unless a seed is explicitly supplied.
+`LINDBERGH_VULKAN_RECIPES_SEED` supplies a portable seed. Catalogue file I/O
+occurs at load/shutdown. Shader hashing occurs at load, and new recipes are
+recorded only when a pipeline is first created. Cached draws perform their
+existing pipeline lookup without recipe hashing, file I/O or synchronization.
+
+After loading shader archives, the host prepares compatible recipes against
+its actual final targets. New guest pbuffers prepare their compatible recipes
+when created, before they are first bound. Renderers and pipelines remain
+resident and are reused by the guest draw path; a warmed driver cache is not
+used as a substitute for retaining the actual objects. Descriptor layouts are
+reconstructed from the current shader reflection, matching the shared dynamic
+UBO and sampled-image schemas. GPU tests bind independently created runtime
+sets to those preloaded layouts and verify distinct stereo output. Target
+resolution is dynamic and does not create another recipe; origin, layers,
+format, final-layout class and density-attachment presence remain distinct.
+
+At exit the helper reports prepared pipeline objects, first-use creations in
+the shader-record path and catalogue entries. The basic diagnostic colored
+renderer is outside this catalogue; its few startup pipelines are still
+covered by the existing preparation profiler. Optional
+`LINDBERGH_VULKAN_PREPARE_TIMING=1` reports unexpected creations during combat.
+Seed coverage is limited to the observed materials/states. New levels or
+control paths may add recipes and must be exercised before coverage claims.
+
+The offscreen runner now pulls `pipeline-cache.bin.recipes` and accepts
+`--pipeline-recipes FILE`. This supplies a seed independently of
+`--pipeline-cache`, so first-install preparation can be tested without prior
+opaque cache bytes. `--no-recipes` disables collection/preparation for a
+control. Build an APK with `quest/build_vulkan.py ... --pipeline-recipes FILE`
+to package `assets/vulkan/pipelines.lvpr`. Android extracts that optional seed
+alongside the required shader archives. The builder removes stale seed assets
+when the option is omitted and records the seed hash in its manifest.
+
+Mac GPU validation passes catalogue capture, read-only seed loading, retained
+objects, compatible runtime descriptors, resolution reuse, origin separation,
+corrupt-file rejection and unknown-shader rejection. Actual Mac guest boot
+records four recipes; a subsequent cold-cache boot with the seed prepares all
+four and reaches its endpoint with zero shader-record first-use creations.
+The corresponding Quest combat result is documented in VULKAN_PERFORMANCE.md.

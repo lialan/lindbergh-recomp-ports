@@ -25,6 +25,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('game', choices=['hotd4sp', 'hotd4', 'ghostsquadevolution', 'lgj'])
     parser.add_argument('--shader-pack', type=Path, required=True)
+    parser.add_argument('--pipeline-recipes',type=Path,help='portable observed pipeline catalogue to prepare during loading')
     parser.add_argument('--gl-headers-root', type=Path, required=True, help='declaration-only include root containing GL/gl.h and GL/glext.h')
     parser.add_argument('--deps', type=Path, default=root.parent/'deps')
     parser.add_argument('--sdk', type=Path, default=Path(os.environ.get('ANDROID_HOME', Path.home()/'Library/Android/sdk')))
@@ -43,6 +44,7 @@ def main():
     for path in [pack, headers/'GL/gl.h', headers/'GL/glext.h', ndk/'build/cmake/android.toolchain.cmake',
                  root/'games'/args.game/'generated/recomp_imports.h']:
         if not path.is_file(): parser.error('missing required input: '+str(path))
+    if args.pipeline_recipes and not args.pipeline_recipes.is_file():parser.error('missing pipeline recipes')
     run('cmake', '-S', root, '-B', build, '-G', 'Ninja',
         '-DCMAKE_TOOLCHAIN_FILE='+str(ndk/'build/cmake/android.toolchain.cmake'),
         '-DANDROID_ABI=arm64-v8a', '-DANDROID_PLATFORM=android-29', '-DCMAKE_BUILD_TYPE=Release',
@@ -72,6 +74,9 @@ def main():
         shutil.copy2(source, libs/source.name)
     shutil.copy2(pack, assets/'game.lvsp')
     shutil.copy2(build/'lindberghrecomp/src/renderer/vulkan/fixed-pack/fixed.lvsp', assets/'fixed.lvsp')
+    seed=assets/'pipelines.lvpr'
+    if args.pipeline_recipes:shutil.copy2(args.pipeline_recipes,seed)
+    elif seed.exists():seed.unlink() # never retain an earlier invocation's seed
     env = os.environ.copy()
     env['ANDROID_HOME'] = str(sdk)
     java = Path('/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home')
@@ -92,6 +97,7 @@ def main():
                 'apk_sha256': hashlib.sha256(output.read_bytes()).hexdigest(),
                 'game_shader_sha256': hashlib.sha256(pack.read_bytes()).hexdigest(),
                 'world_controls_performance_accepted': False}
+    if args.pipeline_recipes:manifest['pipeline_recipes_sha256']=hashlib.sha256(args.pipeline_recipes.read_bytes()).hexdigest()
     (build/'apk-manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     print('Experimental APK:', output)
 
