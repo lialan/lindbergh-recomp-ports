@@ -206,11 +206,10 @@ scene, not a combat-performance measurement.
 both renderers. Direct Vulkan pixel tests use its clip reprojection rather
 than hand-written eye offsets. CPU checks cover head/world-locked HUDs,
 foreground fills, singular-matrix rejection and a truly infinite far plane.
-Finite GL projection arithmetic is retained. The guest's Vulkan draw packets
-still need live camera classification, anchored headset views and the shared
-policy wired into their matrices. XR render-target resolution scaling and
-input/overlay parity also remain open; two-layer storage alone is not a
-finished stereo port or an image-quality/performance acceptance result.
+Finite GL projection arithmetic is retained. The guest draw packets now use live camera classification and cached
+transforms, with anchored headset views and shared target-resolution scaling.
+Input/overlay parity, HUD clipping and world-pass foveation remain open; this
+is not a finished stereo port or a Quest performance acceptance result.
 
 The latest probe collector retains its authenticated START across rolling
 logcat snapshots. An initial run emitted a 120-frame foveated PASS but lost
@@ -234,7 +233,15 @@ are logged separately from runtime acceptance. Mac Vulkan pixel/runtime tests,
 three settings tests and Android GL/Vulkan compilation pass. Live headset
 validation of these additions remains pending.
 
-Guest live-camera wiring is still a separate working-tree experiment: a
-3600-frame normal desktop run retains combat geometry, while simulated-pose
-output loses the world during composition. The experiment is not a completed
-stereo port or a performance result. Resolve this before Quest combat timing.
+Guest live-camera wiring now preserves completed eye images during fullscreen
+composition. Initial simulated-pose output lost the world, while the world
+pbuffer and a two-layer identity-transform control retained it. Full-frame
+copy composites now retain guest clip space instead of receiving a second
+camera transform. A 3600-frame simulated-pose repeat retains combat geometry
+and HUD without validation errors. This remains Mac correctness evidence;
+Quest input/overlay, world-pass foveation and combat acceptance are pending.
+
+Diagnostic captures can select a guest drawable with
+LINDBERGH_VULKAN_SHOT_DRAWABLE=<id>. Such captures are explicitly logged as
+intermediate targets, not final display output. Keep this and classification
+logging disabled during performance comparisons.

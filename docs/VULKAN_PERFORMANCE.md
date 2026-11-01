@@ -131,13 +131,18 @@ storage; do not assume this difference is free on Quest.
 
 ## Live-camera integration follow-up
 
-The shared XR settings/camera foundation is committed and passes Mac core and
-settings tests plus Android compilation. The experimental guest wiring still
-loses world output during final composition: a 3500-frame pbuffer readback
-contains the world, while the final simulated-pose output lacks it. Normal
-desktop composition retains combat geometry. Changing only reconstructed
-depth coefficients or the HUD-lens presentation transform did not resolve it;
-those hypotheses were reverted. Resolve composition before timing acceptance.
+The shared XR settings/camera foundation and guest draw integration are
+committed. Mac core/runtime tests, three settings tests, eight timing tests
+and Android compilation pass. Initial simulated-pose output lost the world
+during final composition despite a valid world pbuffer. Depth reconstruction
+and HUD-lens-only experiments did not resolve it and were reverted. An
+identity-matrix control preserved two-layer storage and restored geometry.
+The fix recognizes fullscreen composites of full-frame GPU copies and keeps
+their guest clip space: those images already contain each eye projection.
+A 3600-frame KosmicKrisp run with simulated poses now retains combat world
+and HUD output without validation errors. Both eyes still travel through the
+GPU-copy/array-sampling path; no effects are skipped. This is local correctness
+evidence, not Quest performance acceptance.
 
 A separate performance gap is visible in source: OpenXR swapchain targets
 carry runtime density-map attachments, but the guest world pbuffers currently
