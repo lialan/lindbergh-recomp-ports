@@ -798,3 +798,11 @@ a few seconds), the attract movie's irregular cadence when muted, the
 full-resolution depth stores of the glow and HUD passes (about 1 ms each in
 the trace, dead only because the next frame clears them), and an 8 s first
 launch precompile despite the packaged driver cache.
+
+Frame-local depth (2026-11-02): those glow and HUD depth stores are gone. A
+target whose depth every frame starts by clearing (learned over 120 frames;
+GL itself keeps depth between frames) stores none after the frame's last pass
+that uses it. In-place sampling no longer flushes the queue, so the frame is
+recorded whole and "last" is exact; a later load of unkept depth is logged and
+that target keeps its depth from then on. Scripted Mission 2 (9000 frames):
+GPU p95 16.96 -> 15.72 ms, frames within 16 ms 87% -> 96%, no misprediction.
