@@ -741,3 +741,44 @@ Its package contents are verified locally, and its dynamic imports contain no
 host GL/EGL/SDL_GL entry points. It has not been installed or tested on the
 headset under the user's local-only instruction. No new Quest/OpenXR combat FPS
 claim follows; the earlier 59.55 FPS offscreen control predates these changes.
+
+## Ghost Squad Evolution: three pipeline inefficiencies (2026-11-01)
+
+Measured on Quest 3 (High foveation, native 2064x2208) with a scripted run of
+the same Mission 2 route each time (`LINDBERGH_SCRIPT`, Guardian paused), GPU
+clock pinned by the runtime at level 4 (640 MHz) throughout. Live
+`ovrgpuprofiler -r` counters first: fragment shading 92% of GPU time, ~110M
+fragments a frame, memory bus only ~54% busy, vertex work 7%. Detailed traces
+(`ovrgpuprofiler -t`) then split each render pass into binning, render and
+load/store stages.
+
+| | GPU median / p95 | frames within 16 ms | world pass | glow | HUD | eye |
+|---|---|---|---|---|---|---|
+| before | 18.2 / 25.1 ms | 6% | 6.5 ms | 4.2-4.9 ms | 2.9 ms | 2.8 ms |
+| GL_COMBINE fast path | 15.2 / 22.6 ms | 64% | 6.5 ms | 2.8 ms | 2.3 ms | 2.7 ms |
+| + NV programs' entry hoisted | 14.0 / 17.7 ms | 80% | 3.6 ms | 2.8 ms | 2.3 ms | 2.8 ms |
+| + swapchain frames start cleared, no depth store | 13.6 / 17.1 ms | 86% | 3.6-4.8 ms | 2.6 ms | 2.6 ms | 1.9 ms |
+
+1. **GL_COMBINE**: GSE's full-screen glow composite and HUD copy are
+   fixed-function `GL_COMBINE` units set to MODULATE(texture, previous).
+   fixed.frag ran its general combiner for them: six source selections and
+   operand/function choices branching on uniform data, per fragment. The glow
+   quad's render stage took 1.53 ms; as classic MODULATE it takes 0.39 ms.
+2. **NV_vertex_program2**: every GSE vertex program has light loops with
+   `CAL`/`RET`, translated as a block-dispatch loop. The position is written
+   in the entry block, but inside the loop the GPU's position-only binning
+   shader could not drop the lighting: world binning took 1.77 ms. With the
+   entry block ahead of the loop it takes 0.37 ms; ALU per vertex 957 -> 350.
+3. **Swapchain frames**: the eye pass loaded the swapchain image's old
+   contents (0.8 ms in the trace) and, once that was a clear, stored a depth
+   buffer nothing reads (1.0 ms). Both are gone.
+
+Ruled out on the headset (no measurable change): skipping a known-zero
+stencil's load/store (~6% of the depth/stencil stages; the cost is the depth
+plane), the GPU `BOOST` performance level (the clock service stays at level 4),
+and `XR_KHR_vulkan_swapchain_format_list` (the Quest runtime lacks it; the
+mutable-format swapchain stays uncompressed, 1.1 ms of the eye pass).
+
+Still open: one 280 ms CPU frame when the mission loads its assets, and the
+full-resolution depth stores of the glow and HUD passes (about 1 ms each in
+the trace), which only the next frame's clears make dead.
