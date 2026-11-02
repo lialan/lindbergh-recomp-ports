@@ -39,7 +39,9 @@ else
     APP=$PKG.vulkan
     adb shell pm path "$APP" >/dev/null 2>&1 || die "$APP is not installed on the Quest"
     # the Vulkan APK is a debug build, so its files are readable through run-as
-    F=$(adb shell run-as "$APP" sh -c "'find files -name vulkan-pipelines.bin -o -name pipelines.bin'" | tr -d '\r' | grep -v '/vulkan/pipelines.bin$' | head -1)
+    # the most recently written cache: an interrupted run can leave an older
+    # copy behind in its private folder (files/vulkan/ holds the packaged seed)
+    F=$(adb shell run-as "$APP" sh -c "'ls -t \$(find files -name vulkan-pipelines.bin -o -name pipelines.bin)'" | tr -d '\r' | grep -v '/vulkan/pipelines.bin$' | head -1)
     [ -n "$F" ] || die "no pipeline cache in $APP's files (run the game first)"
     adb exec-out run-as "$APP" cat "$F" > "$TMP/pipelines.bin"
     adb exec-out run-as "$APP" cat "$F.recipes" > "$TMP/pipelines.lvpr" 2>/dev/null || true

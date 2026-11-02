@@ -779,6 +779,22 @@ plane), the GPU `BOOST` performance level (the clock service stays at level 4),
 and `XR_KHR_vulkan_swapchain_format_list` (the Quest runtime lacks it; the
 mutable-format swapchain stays uncompressed, 1.1 ms of the eye pass).
 
-Still open: one 280 ms CPU frame when the mission loads its assets, and the
+Mission start: each new render target re-created all 652 catalogue pipelines
+(210 ms on Quest 3, several targets at once). Pipelines are now shared by
+every target of a compatible class (`PipelineCache`); a new target takes
+0.5 ms. With a pipeline seed recorded from a full run
+(`scripts/harvest-pipelines.sh`, which now takes the newest cache on the
+headset rather than a stale copy left by an interrupted run), a cold install
+compiles no pipeline during play.
+
+The sound libraries were lifted without the main ELF's passes (direct calls,
+dead flags, registers in locals); with them, the voice decoder that runs on
+the game thread costs 1.5 ms less a frame while a voice plays.
+
+A 24000-frame scripted run (Quest 3, cold install): GPU median 12.8 ms, p95
+16.8 ms; 5-second windows mostly 59.5-60 FPS. Still open: the mission's own
+asset loading (game-thread waits on buffer and texture creation, ~50 FPS for
+a few seconds), the attract movie's irregular cadence when muted, the
 full-resolution depth stores of the glow and HUD passes (about 1 ms each in
-the trace), which only the next frame's clears make dead.
+the trace, dead only because the next frame clears them), and an 8 s first
+launch precompile despite the packaged driver cache.

@@ -26,6 +26,16 @@ is under Unreleased, taken from the commits.
 - `CHANGELOG.md`, `ROADMAP.md`, `CONTRIBUTING.md`, CI that builds and runs the
   toolkit's self-check on every push and PR, and a netlab recipe.
 
+### Fixed
+- Voice lines play. The game names each voice file with `%C` (a wide
+  character), which the runtime's printf did not handle, so every voice file
+  failed to open; the game then queried the failed voice's null handle and
+  crashed about 5.5 minutes into a mission (on the Quest and anywhere else).
+- On Quest 3 (Vulkan), GPU time per frame in a scripted Mission 2 fell from
+  18.2 to 13.6 ms (median) with no quality change, and missions no longer
+  open with 200-280 ms stalls while each new render target rebuilt every
+  pipeline. Details in `docs/VULKAN_PERFORMANCE.md`.
+
 ### Changed
 - The toolkit is pinned to lindberghrecomp `d65e3b4` (lindberghrecomp#1, #2).
   The game still lifts (6,033 functions, 298 imports) and builds against it.
