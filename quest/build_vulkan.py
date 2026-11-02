@@ -37,6 +37,10 @@ def main():
     parser.add_argument('--jobs', type=int, default=6)
     parser.add_argument('--no-apk', action='store_true')
     parser.add_argument('--offscreen',action='store_true',help='build an executable diagnostic without APK, Activity or OpenXR')
+    parser.add_argument('--release',metavar='VERSION',help="a release (a tag like v0.4.0): the app's own package ID, release-signed "
+                        "(<KEY>_KEYSTORE, as quest/build.sh), versioned; it installs over the OpenGL app")
+    parser.add_argument('--output',type=Path,help='where the APK goes (default: in the build directory)')
+    parser.add_argument('--gradle-online',action='store_true',help="let Gradle download what it lacks (CI); default offline")
     args = parser.parse_args()
     if args.jobs < 1: parser.error('--jobs must be positive')
     default_build=root/('build-quest-vulkan-offscreen' if args.offscreen else 'build-quest-vulkan')/args.game
@@ -101,21 +105,31 @@ def main():
     # build adds it from SDL's tree (sdlJavaDir), so a leftover copy duplicates
     # every class. The copy is generated and gitignored.
     shutil.rmtree(root/'quest'/args.game/'src/main/java/org/libsdl', ignore_errors=True)
-    run(root/'quest/gradlew', '-p', root/'quest', ':'+args.game+':assembleDebug', '--offline',
+    kind = 'release' if args.release else 'debug'
+    release = []
+    if args.release:
+        # as quest/build.sh: v1.2.3 -> versionName 1.2.3, versionCode 10203
+        version = args.release[1:] if args.release.startswith('v') else args.release
+        parts = (version.split('-')[0].split('.')+['0','0'])[:3]
+        release = ['-PnativeRelease=true', '-PappVersionName='+version,
+                   '-PappVersionCode='+str(int(parts[0])*10000+int(parts[1])*100+int(parts[2]))]
+    run(root/'quest/gradlew', '-p', root/'quest', ':'+args.game+':assemble'+kind.capitalize(),
+        *([] if args.gradle_online else ['--offline']),
         '-PnativeRenderer=vulkan', '-PnativeLibsDir='+str(libs.parent), '-PnativeAssetsDir='+str(assets.parent),
         '-PsdlJavaDir='+str(deps/'SDL2-2.32.10/android-project/app/src/main/java'),
-        '-PelfSha256='+sha_file.read_text().strip(), env=env)
-    apk = root/'quest'/args.game/'build/outputs/apk/debug'/(args.game+'-debug.apk')
-    output = build/(args.game+'-vulkan-debug.apk')
+        '-PelfSha256='+sha_file.read_text().strip(), *release, env=env)
+    apk = root/'quest'/args.game/'build/outputs/apk'/kind/(args.game+'-'+kind+'.apk')
+    output = (args.output or build/(args.game+'-vulkan-'+kind+'.apk')).resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(apk, output)
-    manifest = {'game': args.game, 'renderer': 'native-vulkan-openxr',
+    manifest = {'game': args.game, 'renderer': 'native-vulkan-openxr', 'release': args.release or None,
                 'apk_sha256': hashlib.sha256(output.read_bytes()).hexdigest(),
                 'game_shader_sha256': hashlib.sha256(pack.read_bytes()).hexdigest(),
                 'world_controls_performance_accepted': False}
     if args.pipeline_recipes:manifest['pipeline_recipes_sha256']=hashlib.sha256(args.pipeline_recipes.read_bytes()).hexdigest()
     if args.pipeline_cache:manifest['pipeline_cache_sha256']=hashlib.sha256(args.pipeline_cache.read_bytes()).hexdigest()
     (build/'apk-manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
-    print('Experimental APK:', output)
+    print('Release APK:' if args.release else 'Experimental APK:', output)
 
 
 if __name__ == '__main__':

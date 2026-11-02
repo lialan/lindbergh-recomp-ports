@@ -16,13 +16,16 @@ allprojects {
     }
 }
 
-// Native Vulkan experiments use isolated artifacts and package IDs. Keep the
-// normal OpenGL modules and their staged libraries/assets independent.
+// Native Vulkan builds use their own staged libraries/assets. A development
+// build also gets its own package ID (.vulkan), beside the OpenGL app; a
+// release (quest/build_vulkan.py --release) keeps the app's ID and installs
+// over the OpenGL one.
 subprojects {
     afterEvaluate { module ->
         if (module.plugins.hasPlugin('com.android.application') &&
             module.findProperty('nativeRenderer') == 'vulkan') {
-            module.android.defaultConfig.applicationId += '.vulkan'
+            if (module.findProperty('nativeRelease') != 'true')
+                module.android.defaultConfig.applicationId += '.vulkan'
             module.android.sourceSets.main.jniLibs.setSrcDirs([module.property('nativeLibsDir')])
             module.android.sourceSets.main.assets.setSrcDirs([module.property('nativeAssetsDir')])
             module.android.sourceSets.main.java.srcDir(module.property('sdlJavaDir'))

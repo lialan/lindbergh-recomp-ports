@@ -1,8 +1,10 @@
 name: quest
-# Builds each game's Meta Quest APK. The games' code, lifted to C from their
-# executables, lives in the private repo lialan/gse-recomp-generated, one
-# folder per game (read with the deploy key in GSE_GENERATED_KEY); an APK
-# carries that code but none of the game's files, which players copy to the
+# Builds each game's Meta Quest APK (native Vulkan, quest/build_vulkan.py).
+# The games' code, lifted to C from their executables, lives in the private
+# repo lialan/gse-recomp-generated, one folder per game, with each game's
+# Vulkan inputs in vulkan/<game>/ (its shaders compiled to SPIR-V and its
+# pipeline seeds); read with the deploy key in GSE_GENERATED_KEY. An APK
+# carries that but none of the game's files, which players copy to the
 # headset themselves.
 #
 # Every push to main leaves the APKs as workflow artifacts; a v* tag also
@@ -27,8 +29,6 @@ jobs:
             key: GSE            # its signing key: secrets <key>_KEYSTORE_B64 / _PASSWORD
           - game: hotd4
             key: HOTD4
-          - game: lgj
-            key: LGJ
           - game: hotd4sp
             key: HOTD4SP
     env:
@@ -46,7 +46,9 @@ jobs:
           repository: lialan/gse-recomp-generated
           ssh-key: ${{ secrets.GSE_GENERATED_KEY }}
           path: lifted
-      - run: mkdir -p games/${{ matrix.game }}/generated && cp lifted/${{ matrix.game }}/* games/${{ matrix.game }}/generated/ && rm -rf lifted
+      - run: |
+          mkdir -p games/${{ matrix.game }}/generated && cp lifted/${{ matrix.game }}/* games/${{ matrix.game }}/generated/
+          mv lifted/vulkan "$RUNNER_TEMP/vulkan" && rm -rf lifted
 
       - uses: actions/setup-java@v4
         with:
@@ -55,7 +57,7 @@ jobs:
 
       - name: Android NDK and SDK platform
         run: |
-          sudo apt-get install -y -q ninja-build
+          sudo apt-get install -y -q ninja-build glslang-tools spirv-cross
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install \
             "ndk;$NDK_VERSION" "platforms;android-35" "build-tools;35.0.0" > /dev/null
           echo "ANDROID_NDK=$ANDROID_SDK_ROOT/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
@@ -81,15 +83,21 @@ jobs:
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           export ${{ matrix.key }}_KEYSTORE=$RUNNER_TEMP/release.keystore
           export ${{ matrix.key }}_KEYSTORE_PASSWORD="$KEYSTORE_PASSWORD"
-          quest/build.sh ${{ matrix.game }}
+          . games/${{ matrix.game }}/game.conf
+          VK=$RUNNER_TEMP/vulkan
+          python3 quest/build_vulkan.py ${{ matrix.game }} --release "$VERSION" --gradle-online \
+            --shader-pack "$VK/${{ matrix.game }}/game.lvsp" --seeds "$VK" \
+            --gl-headers-root "$DEPS/gl-headers" --output "quest/$APK.apk"
           rm -f "$RUNNER_TEMP/release.keystore"
 
       - name: Check and name the APK
         run: |
           . games/${{ matrix.game }}/game.conf
-          # a release must never carry the game's own files
-          if unzip -l "quest/$APK.apk" | grep -q ' assets/'; then
-            echo "the APK contains game files"; exit 1
+          # a release must never carry the game's own files: its only assets
+          # are the Vulkan runtime's compiled shader packs and pipeline seeds
+          if unzip -Z1 "quest/$APK.apk" | grep '^assets/' |
+             grep -vxE 'assets/vulkan/(fixed|game)\.lvsp|assets/vulkan/pipelines\.(lvpr|bin)'; then
+            echo "the APK contains files other than the Vulkan runtime's"; exit 1
           fi
           OUT=$APK-$VERSION-quest3.apk
           mv "quest/$APK.apk" "$OUT"

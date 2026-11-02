@@ -9,6 +9,9 @@
 #   openal-soft/      OpenAL Soft 1.24.3 source; openal-android/ its build
 #   oxr/              the Khronos OpenXR loader for Android 1.1.49 (an .aar,
 #                     unpacked)
+#   gl-headers/       Mesa 26.2.6's GL/ and KHR/ headers, nothing else: the
+#                     Vulkan build's guest GL declarations
+#                     (quest/build_vulkan.py --gl-headers-root)
 #
 #   quest/deps.sh
 #
@@ -53,5 +56,13 @@ if [ ! -f oxr/jni/arm64-v8a/libopenxr_loader.so ]; then
     curl -fsSLo openxr_loader_for_android-1.1.49.aar \
         https://repo1.maven.org/maven2/org/khronos/openxr/openxr_loader_for_android/1.1.49/openxr_loader_for_android-1.1.49.aar
     mkdir -p oxr && (cd oxr && unzip -qo ../openxr_loader_for_android-1.1.49.aar)
+fi
+
+if [ ! -f gl-headers/GL/glext.h ] || [ ! -f gl-headers/KHR/khrplatform.h ]; then
+    mkdir -p gl-headers
+    for d in GL KHR; do
+        curl -fsSL "https://gitlab.freedesktop.org/mesa/mesa/-/archive/mesa-26.2.6/mesa-mesa-26.2.6.tar.gz?path=include/$d" | tar xz
+        rm -rf "gl-headers/$d" && mv "mesa-mesa-26.2.6-include-$d/include/$d" gl-headers/ && rm -rf "mesa-mesa-26.2.6-include-$d"
+    done
 fi
 echo "dependencies ready in $DEPS"

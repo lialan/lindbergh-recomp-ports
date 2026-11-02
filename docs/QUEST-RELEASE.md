@@ -4,12 +4,43 @@ Sega Lindbergh arcade games in VR, for Meta Quest 3, Quest 3S and Quest Pro:
 | --- | --- |
 | Ghost Squad Evolution | `GhostSquadEvolutionVR-<version>-quest3.apk` |
 | The House of the Dead 4 | `HouseOfTheDead4VR-<version>-quest3.apk` |
-| Let's Go Jungle! (experimental: a bit buggy) | `LetsGoJungleVR-<version>-quest3.apk` |
 | The House of the Dead 4 Special | `HouseOfTheDead4SpecialVR-<version>-quest3.apk` |
+
+Let's Go Jungle! is not part of this release: its latest build is
+[v0.2.7](https://github.com/lialan/lindbergh-recomp-ports/releases/tag/v0.2.7)
+(experimental, a bit buggy).
 
 **The games themselves are not included.** Each APK holds a port: the game's
 code recompiled to run natively on the headset, the VR host, and its
 libraries. You need your own copy of the arcade game.
+
+## New in v0.4.0
+
+- **Native Vulkan.** Ghost Squad Evolution, The House of the Dead 4 and The
+  House of the Dead 4 Special now draw with Vulkan on the headset, instead of
+  OpenGL translated by gl4es. Each game's shaders are compiled ahead of time
+  and its pipelines prepared before play, so scenes no longer stutter while
+  shaders compile.
+- **Frame rate.** The House of the Dead 4 runs at a steady 60 fps on the
+  Quest 3. Ghost Squad Evolution is much faster than in v0.2.7; its heaviest
+  scenes can still dip below 60.
+- **First start:** a *Compiling shaders* box shows for a few seconds while
+  the game's pipelines are built; later starts skip it. A shader program the
+  game builds that the packaged set lacks is compiled on the headset the
+  first time it is needed (a brief hitch, once), so nothing is left undrawn.
+- **Foveation:** a new setting (Off, Low, Medium, High; High by default)
+  renders the edges of your view at lower detail, for frame rate.
+- **Show stats** (it was *Show FPS*): a panel at the top right with the frame
+  rate, CPU and GPU load, and memory.
+- **Menus and the sniping scope:** menus, and a held sniping scope in Ghost
+  Squad Evolution, are the arcade's own picture on the screen in front of
+  you, with nothing of the game outside it, as in the OpenGL builds.
+- **Ghost Squad Evolution fixes:** missing ground and other polygons in
+  Mission 3; voice lines play (one could crash the game); fewer hitches as a
+  mission starts.
+- Installing over v0.2.7 keeps your settings and saved cabinet data (same
+  package and signing keys). As before, bring your own game files: the APKs
+  contain no game data.
 
 ## New in v0.2.7
 
@@ -31,29 +62,6 @@ libraries. You need your own copy of the arcade game.
     Special, and player 2 joins with their first shot.
 - Let's Go Jungle! is still experimental (a bit buggy).
 - Installing over v0.2.6 keeps your settings (same signing keys). As before,
-  bring your own game files: the APKs contain no game data.
-
-## New in v0.2.6
-
-- **Dual wielding** in all four games: turn on *Dual wield* in the settings
-  panel (it is saved). The gun hand is player 1; the other hand is player 2,
-  with a blue laser and a red dot. Each hand's thumbstick click is that
-  player's Start. Player 2's gun goes through the cabinet's JVS, as on the
-  arcade.
-- **Gun models:** The House of the Dead 4 and The House of the Dead 4 Special
-  put a B&T TP9 in your hand; Ghost Squad Evolution a model of the cabinet's
-  own gun controller. The red-dot sight is a slim reflex sight in every game.
-- **Performance on the Quest:** The House of the Dead 4 does its GL work on
-  its own thread; the games' own GLSL shader programs are cached on disk, so
-  scenes start with less stutter after the first run; gl4es builds shader
-  text faster; The House of the Dead 4, Let's Go Jungle! and Ghost Squad
-  Evolution are re-translated with the current lifter (faster game code);
-  viewport and scissor reads no longer wait for the GL thread, nor do
-  client-array batches or glXMakeCurrent (in The House of the Dead 4, from 52
-  waits a frame to none); queueing GL calls is cheaper.
-- The settings panel's last row (*Close*) is no longer cut off.
-- Let's Go Jungle! is still experimental (a bit buggy), as in v0.2.5.
-- Installing over v0.2.5 keeps your settings (same signing keys). As before,
   bring your own game files: the APKs contain no game data.
 
 ## Install
@@ -106,7 +114,8 @@ Trigger fires, grip reloads (or pull the trigger pointing off the screen), a
 thumbstick click is Start, and coins are automatic; in The House of the Dead 4
 Special, shake the gun to reload. The left controller's
 menu button opens the settings panel: sights, laser, gun model, gun hand,
-dual wield, resolution, display rate, recentring, and Reset game. With dual
+dual wield, show stats, resolution, display rate, foveation, recentring, and
+Reset game. With dual
 wield on, the other hand is player 2, and each hand's thumbstick click is its
 player's Start.
 
