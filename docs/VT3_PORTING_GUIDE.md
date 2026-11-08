@@ -177,7 +177,7 @@ lindberghrecomp runtime:
 ### Open issues
 
 1. ~~Replay camera / pre-match intro flat colour~~ — fixed, see Section 5.
-2. **Audio** — the runtime starts muted (press M). Not yet confirmed working once unmuted.
+2. ~~Audio~~ — works (confirmed by ear). SEGAAPI is answered by `hle_segaapi.c`; it starts muted, M toggles (or `LINDBERGH_MUTE=0`). `LINDBERGH_SEGA_METER=1` logs the mix peak and voice count every two seconds.
 3. **Quest APK** — `quest/vt3` and `games/vt3/src/android_main.c` exist but have never been built: `quest/deps.sh` (SDL2, gl4es, OpenAL, OpenXR loader) has not been run on this machine. Launcher icons are hotd4 placeholders.
 4. **Vulkan renderer** — untested for VT3 (needs a shader pack via `quest/build_vulkan.py`).
 5. **Other games** (hotd4, lgj, gse) have not been rebuilt against the toolkit changes above. The lifter changes (16-bit push, x87 rounding) affect every game and should be regression-checked.
