@@ -124,61 +124,128 @@ All HLE stream and string implementations in `lindberghrecomp/src/runtime/hle_cx
 
 ---
 
-### 3.4 JVS Input Mapping (8-Way Joystick + 3 Shot Buttons)
+### 3.4 JVS Input Mapping (8-Way Lever + 3 Shot Buttons) — DONE
 
-In `lindberghrecomp/src/runtime/hle_sega.c`, Sega JVS switch bytes for Virtua Tennis 3:
-- **Byte 0 (`byte == 0`):**
-  - `0x80`: **Start** (`CAB_P1_START`)
-  - `0x40`: **Service** (`CAB_SERVICE`)
-  - `0x20`: **Up** (`CAB_P1_UP`)
-  - `0x10`: **Down** (`CAB_P1_DOWN`)
-  - `0x08`: **Left** (`CAB_P1_LEFT`)
-  - `0x04`: **Right** (`CAB_P1_RIGHT`)
-  - `0x02`: **Button 1 (Topspin / Normal Shot / Confirm)** (`CAB_P1_TRIGGER`)
-  - `0x01`: **Button 2 (Lob / Cancel)** (`CAB_P1_RELOAD`)
-- **Byte 1 (`byte == 1`):**
-  - `0x80`: **Button 3 (Slice / Drop Shot)** (`CAB_P1_ACTION`)
-  - `0x40`: **Button 4** (`CAB_P1_FIREMODE`)
+`hle_sega.c` (`jvs_switch_byte`) reports VT3's switches:
 
-Buttons 1, 2, and 3 match the default Lindbergh cabinet bit layout out of the box. Only the 4 directional bits (`0x20`, `0x10`, `0x08`, `0x04`) need to be mapped to keyboard Arrow/WASD keys and Quest thumbstick axes.
+| Byte | Bit | Meaning | Cabinet bit (`cabinet_buttons.h`) |
+| --- | --- | --- | --- |
+| 0 | `0x80` | Start | `CAB_P1_START` |
+| 0 | `0x40` | Service | `CAB_SERVICE` |
+| 0 | `0x20` / `0x10` / `0x08` / `0x04` | Up / Down / Left / Right | `CAB_P1_UP/DOWN/LEFT/RIGHT` (bits 12-15) |
+| 0 | `0x02` | Button 1 (topspin) | `CAB_P1_TRIGGER` |
+| 0 | `0x01` | Button 2 (lob) | `CAB_P1_BUTTON2` (bit 16) |
+| 1 | `0x80` | Button 3 (slice) | `CAB_P1_BUTTON3` (bit 17) |
+| 1 | `0x40` | Button 4 | `CAB_P1_FIREMODE` |
 
----
+Player 2's lever and buttons 2-3 are the same bits shifted by `CAB_P2_JOY_SHIFT` (8).
 
-## 4. Current Status & Verification
+- **Keyboard** (defaults in `host_settings.c`, rebindable from the Controls menu): arrows = lever, Z / X / C = topspin / lob / slice, 5 = coin, 1 = start, M = mute (starts muted), Esc = quit.
+- **Game controllers** (`host_sdl.c`): the first pad is P1, the second P2. D-pad or left stick = lever (8 sectors), A/B/X = buttons 1-3, Y = button 4, Start, Back = coin.
+- **Quest** (`xr_controls.c`, when the profile sets `joystick`): either thumbstick = lever; right trigger = topspin; A or left trigger = lob; B or left X = slice. Untested on a headset.
+- `game_profile.h` `joystick = 1` (VT3's `host.c`) also stops "pointer left the window" from pressing reload (which is button 2 here).
 
-1. **Extraction:**
-   - Both `Virtua Tennis 3.7z` and `House of the Dead 4.7z` are extracted under `<workspace>/`.
-2. **Lifted Code & Compilation:**
-   - `vt3_Lindbergh_HD` lifted into 52 translation units (`recomp_funcs_0000.c` .. `recomp_funcs_0051.c`) with 368 imports.
-   - `libCg.so` lifted via `solib.py` into 33 translation units (`recomp_solib_funcs_0000.c` .. `recomp_solib_funcs_0032.c`) and `recomp_solib.h` (13,153 functions).
-   - `build-mac/vt3` compiles and links cleanly (`[119/119] Linking C executable vt3`).
-3. **Runtime & HLE Additions (100% Bound — `0 of 387 imports have no body`!):**
-   - `hle_libc.c`: Added `unsetenv`, `creat`, `getc`, `log10f`, `raise`, `cfsetspeed`, `finite`, `isinf`, `isnan`, `_setjmp`, `longjmp`, `__write`, `fputs_unlocked`, `ferror_unlocked`.
-   - `hle_glx_posix.c`: Added `XGetErrorText`.
-   - `hle_cg.c` / `hle.c`: Added `cgGLGetLatestProfile`, `cgGLIsProfileSupported`, `cgGLSetOptimalOptions`.
-   - `hle_cxx.c`: Added `_ZNSs9_M_mutateEjjj`, `_ZNKSs4findEPKcjj`, `_ZNKSs4findEcj`, `_ZNKSs5rfindEPKcjj`, `_ZNKSs7compareEPKc`, `_ZNSt8ios_baseC2Ev`, `_ZNSt8ios_baseD2Ev`, `_ZNSt6localeC1Ev`, `_ZNSt6localeD1Ev`, `_ZNSt9basic_iosIcSt11char_traitsIcEE4initEPSt15basic_streambufIcS1_E`, `_ZNSt9basic_iosIcSt11char_traitsIcEE5clearESt12_Ios_Iostate`, `_ZNKSt9basic_iosIcSt11char_traitsIcEE5widenEc`, `_ZNSt15basic_stringbufIcSt11char_traitsIcESaIcEE17_M_stringbuf_initESt13_Ios_Openmode`, `_ZNSt13basic_filebufIcSt11char_traitsIcEEC1Ev`, `_ZNSt13basic_filebufIcSt11char_traitsIcEE4openEPKcSt13_Ios_Openmode`, `_ZNSt13basic_filebufIcSt11char_traitsIcEE5closeEv`, `_ZNSt12__basic_fileIcED1Ev`, `_ZNSi5seekgElSt12_Ios_Seekdir`, `_ZNSi5tellgEv`, `_ZNSi4readEPci`, `_ZSt7getlineIcSt11char_traitsIcESaIcEERSt13basic_istreamIT_T0_ES7_RSbIS4_S5_T1_ES4_`, `_ZSt20__throw_length_errorPKc`, `_ZSt20__throw_out_of_rangePKc`.
-   - `disasm32.py`: Added GCC `push ebp; mov ebp, esp` (`55 89 E5`) and 128-byte chunking in `disassemble_at`.
-   - `solib.py`: Enabled `find_functions` fallback for stripped `.so` binaries.
-   - `games/vt3/game.conf`: Set `SOLIBS="lib/libCg.so"`.
+Menus: on the player-select and tournament screens press **Z**; on court select press **Enter**. Waiting for the timers costs about a minute per screen.
 
 ---
 
-## 5. Pass-Off Instructions for Next Agent
+## 4. Current Status (2026-11-08)
 
-To continue the project:
-1. **Run macOS Binary:**
-   ```bash
-   cd <workspace>/lindbergh-recomp-ports
-   ./scripts/run-macos.sh --opengl vt3 <workspace>/vt3/extracted/disk0
-   ```
-2. **Wire 8-Way Controls:**
-   - In `lindberghrecomp/src/runtime/cabinet_buttons.h`:
-     Define `CAB_P1_UP (1u << 20)`, `CAB_P1_DOWN (1u << 21)`, `CAB_P1_LEFT (1u << 22)`, `CAB_P1_RIGHT (1u << 23)`.
-   - In `lindberghrecomp/src/runtime/hle_sega.c` (`jvs_switch_byte`):
-     Map `CAB_P1_UP` -> `0x20`, `CAB_P1_DOWN` -> `0x10`, `CAB_P1_LEFT` -> `0x08`, `CAB_P1_RIGHT` -> `0x04` when `byte == 0`.
-   - In `host_sdl.c`: map Arrow keys / WASD and Gamepad D-pad to these flags.
-   - In `xr_actions.c`: map Quest left thumbstick to these flags.
-3. **Build Quest 3 APK:**
-   - Copy `games/hotd4/src/android_main.c` -> `games/vt3/src/android_main.c`.
-   - Create `quest/vt3/` build directory using `quest/hotd4/` as the template.
-   - Run `./quest/build.sh vt3` and install with `./quest/install.sh vt3 <workspace>/vt3/extracted/disk0`.
+### Works on macOS (OpenGL renderer, `--opengl`)
+
+- Boots through `CARD R/W INITIALIZING`, the SEGA logo, attract mode (video plays), menus, and into a match at a steady 60 fps.
+- All of VT3's shaders compile through the **lifted libCg.so** (no precompiled `.asm_gl` exists for VT3, so `hle_cg.c`'s disc lookup cannot be used).
+- Logos, courts, crowd, umpire, ball kids, and **skinned players** (arms, shirts, hands) render correctly.
+
+### Fixes made this session (all pushed, see Section 6)
+
+pcrecomp (lifter/disassembler):
+- `push ax` / `pop ax` (0x66 prefix) move esp by 2 (libCg passes shorts with `sub esp,2; push ax`).
+- x87 rounding control: `fldcw` is honoured; `frndint` and `fist(p)` round by the RC bits (GCC's `(int)` casts; libCg's `ceil(log2 n)` array growth).
+- Disassembler: straight runs longer than 4 KB continue as new leaders; GCC PIC switch tables (`sub r,[ebx+i*4+d]; jmp r`) recognised, bounded by the last live `cmp r, imm`.
+
+lindberghrecomp `solib.py` (lifting libCg):
+- Drop candidate function starts that fall inside another instruction; size discovered functions by their own control-flow reach (bodies may overlap).
+- Switch arms, out-of-body branch targets and `lea r,[ebx+f@GOTOFF]` callbacks become entries; the lifter gets NOPs over inline switch tables.
+- Data imports emitted (`SOLIB_DATA`) and filled at load (`__ctype_b/tolower/toupper`).
+
+lindberghrecomp runtime:
+- `arbprog.c` (ARB -> GLSL): classic vertex names (`vertex.color`, `vertex.texcoord[n]`, `vertex.weight`, ...) alias generic attributes as on NVIDIA; `fragment.facing`; register-relative constant reads clamped to the array; **program locals raised from 96 to 1024** (VT3's bone palette reaches `c[225]` — this was the missing-arms bug).
+- `hle_cxx.c`: istream `basic_ios` found when the copied libstdc++ vtable reads 0 (shader parser spun forever); `hle_libc.c`: relative `fopen` retried under `TEA_DIR` (scene shaders `shader/*.fx`).
+- `hle_glx_posix.c`: `GLX_SGIX_fbconfig/pbuffer` as framebuffer objects, behind profile flag `glx_sgix_pbuffer`.
+
+### Open issues
+
+1. ~~Replay camera / pre-match intro flat colour~~ — fixed, see Section 5.
+2. **Audio** — the runtime starts muted (press M). Not yet confirmed working once unmuted.
+3. **Quest APK** — `quest/vt3` and `games/vt3/src/android_main.c` exist but have never been built: `quest/deps.sh` (SDL2, gl4es, OpenAL, OpenXR loader) has not been run on this machine. Launcher icons are hotd4 placeholders.
+4. **Vulkan renderer** — untested for VT3 (needs a shader pack via `quest/build_vulkan.py`).
+5. **Other games** (hotd4, lgj, gse) have not been rebuilt against the toolkit changes above. The lifter changes (16-bit push, x87 rounding) affect every game and should be regression-checked.
+6. `lindbergh_nvram.bin` is written beside the executable; the card-reader message is Japanese-only (cabinet language setting).
+
+---
+
+## 5. Replay Camera / Pre-Match Intro — RESOLVED
+
+### Symptom
+After a point, the replay ("LIVE" logo) and the pre-match intro right after court selection showed one flat colour behind the 2D overlays, though the 3D scene was drawn correctly underneath.
+
+### The pipeline (traced)
+1. The scene is drawn to the window, then copied into texture 17 (`glCopyTexSubImage2D`).
+2. A post-process chain runs through the game's FBOs: fb 1 / fb 2 (1360x768 textures 12 / 13) at several viewport sizes; **fb 3** (texture 14, 680x384) via `v32/f33` (4-tap blur); **fb 4** (texture 15) via `v26/f27` (glare).
+3. One full-screen `v59/f60` draw composites: `(lerp(scene, blurred, saturate(|depth*c1.x + c1.y|)) + glare) * f_loc0.x + transition * f_loc0.y`. The DOF factor saturates for most pixels, so the screen is mostly texture 14.
+
+### Cause
+Texture 14 was always black. The blur quad is plain immediate mode (`glBegin`, `glTexCoord2f`, `glVertex3f`) with correct coordinates, but the translated shader picks texcoord 0 as `u_gen[8] > 0.5 ? va_8 : gl_MultiTexCoord0`, and `u_gen` came from the runtime's own record of `glEnable/DisableVertexAttribArrayARB`. That record went stale: `glPopClientAttrib` (called every pass) and entry points fetched through `glXGetProcAddress` change array state without passing the hook. With `u_gen[8]` stuck at 1 the shader read a stale generic array, every pixel sampled one texel, and the frame went flat.
+
+### Fix
+`arbprog.c` `upload()`: `u_gen` is filled from `glGetVertexAttribiv(i, GL_VERTEX_ATTRIB_ARRAY_ENABLED)` at each draw instead of the remembered state. Verified on the intro: texture 14 fills (261,120 pixels) and the close-up of the opponent fades in with the "LIVE" logo.
+
+### A wrong turn worth knowing about
+I first concluded the quads lived in display lists and sent texcoords with immediate `glVertexAttrib2fARB(8, ...)`. Both were wrong. The "display list" idea came from probes that called `glGetIntegerv` between `glBegin` and `glEnd`, which GL forbids, so they silently saw nothing. `LINDBERGH_LIST_LOG=1` showed VT3's lists hold only texture state, and `LINDBERGH_VA_LOG=1` showed the game never calls `glVertexAttrib*ARB`. The routing written for that theory (`va_alias` in `hle_gl_posix.c`: immediate generic attributes go to their classic twins, as on NVIDIA) is correct NVIDIA behaviour and harmless, so it stays, but nothing in VT3 exercises it.
+
+---
+
+## 6. Working Notes for the Next Agent
+
+### Repos and branches
+- `lindbergh-recomp-ports` (outer), submodule `lindberghrecomp`, nested `lindberghrecomp/pcrecomp`. Work is on branch **`vt3-port`** in all three, pushed to forks under `mrchrisster` (remote `fork`); upstream is `lialan`. Submodule URLs in `.gitmodules` are relative, so a clone of either owner resolves to that owner's submodules. PRs go inner-first: pcrecomp, lindberghrecomp, then the outer repo.
+- Never commit `games/*/generated/` (lifted game code; gitignored) or any game data.
+
+### Build and run
+```bash
+cd <workspace>/lindbergh-recomp-ports
+./scripts/build-macos.sh --opengl vt3 <workspace>/vt3/extracted/disk0   # full re-lift + build (~5 min)
+cd build-mac && ninja vt3                                                  # runtime-only changes
+./scripts/run-macos.sh --opengl vt3 <workspace>/vt3/extracted/disk0
+```
+Run long tests in the background and stop them by PID; never `killall`.
+
+### Driving the game without a person
+- `LINDBERGH_AUTOSTART=1`: coin at frame 300, start every 2 s.
+- `LINDBERGH_KEYS="frame:key,..."`: scripted key taps (`\r` = Enter). Reaching the pre-match intro (~frame 2500):
+  ```bash
+  K=""; for f in $(seq 1500 90 3300); do K="$K$f:z,"; done
+  for f in 2000 2400 2800 3200; do K="$K$((f+45)):"$'\r'","; done
+  LINDBERGH_AUTOSTART=1 LINDBERGH_KEYS="$K" ./scripts/run-macos.sh --opengl vt3 ...
+  ```
+  Without keys the first replay lands around frame 7800 (it drifts between runs).
+- `LINDBERGH_SHOT=<path> LINDBERGH_SHOT_EVERY=N LINDBERGH_SHOT_FROM=F`: saves PPM frames.
+
+### Diagnostic switches (all off by default)
+| Switch | What it shows |
+| --- | --- |
+| `LINDBERGH_SOLIB_TRACE=1` | Calls into lifted libCg, args, and the Cg compiler listing on failure |
+| `LINDBERGH_CXX_TRACE=1` | iostream open / read / getline |
+| `LINDBERGH_ARB_DUMP=1` (+ `ARB_NOCACHE=1`) | The GLSL every ARB program translates to |
+| `LINDBERGH_GL_TRACE=<frame>` | Every GL call of that frame, plus a `[draw]` block per draw: programs, target FBO status/attachments, scissor/stencil/cull/draw buffer, textures on units 0-4 with content readback, constants, attributes, and `[skin]` decoding of bone weights/indices |
+| `LINDBERGH_TRACE_VP=26,51 LINDBERGH_TRACE_FROM=<frame>` | The same `[draw]` block for the first 60 draws using those vertex programs, plus that draw's `glTexCoord2f`/`glVertex3f` arguments up to its `glEnd`. Prefer this to frame numbers: scenes drift a few hundred frames between runs |
+| `LINDBERGH_TEX_WATCH=<texture>` | That texture's content at every traced draw |
+| `LINDBERGH_FB_PROBE=<fbo>` | Readback/vertices while that FBO is bound. Caveat: it queries GL inside `glBegin`/`glEnd`, where queries fail silently, so it misses immediate-mode quads |
+| `LINDBERGH_FP_SOLID=1/2/3/4` (+ `FP_ONLY=<id>`) | Replace fragment programs: solid green / raw unit 0 / texcoord as colour / vertex colour |
+| `LINDBERGH_ARB_NOCLAMP=1` | Turns off the relative-index clamp (comparison only) |
+| `LINDBERGH_LIST_LOG=1` | The calls recorded into each display list |
+| `LINDBERGH_VA_LOG=1` | Immediate `glVertexAttrib*ARB` calls and where they are routed |
+
+### Method that has worked
+Capture frames, then binary-search the pipeline with readbacks: which draw, which target, which texture, which constants, which inputs. Never query GL state between `glBegin` and `glEnd`: the query fails silently and misleads. Each bug so far was a one-line semantic gap between NVIDIA's 2006 GL and Apple's (attribute aliasing, out-of-range reads, local-parameter limits, rounding mode, 16-bit pushes), found by measuring rather than guessing.
