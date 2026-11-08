@@ -178,7 +178,12 @@ lindberghrecomp runtime:
 
 1. ~~Replay camera / pre-match intro flat colour~~ — fixed, see Section 5.
 2. ~~Audio~~ — works (confirmed by ear). SEGAAPI is answered by `hle_segaapi.c`; it starts muted, M toggles (or `LINDBERGH_MUTE=0`). `LINDBERGH_SEGA_METER=1` logs the mix peak and voice count every two seconds.
-3. **Quest APK** — `quest/vt3` and `games/vt3/src/android_main.c` exist but have never been built: `quest/deps.sh` (SDL2, gl4es, OpenAL, OpenXR loader) has not been run on this machine. Launcher icons are hotd4 placeholders.
+3. **Quest APK** — builds (`quest/VirtuaTennis3VR.apk`, 25 MB, no game data) but has **not been run on a headset** yet. Build steps on this machine:
+   - `quest/deps.sh` with `ANDROID_NDK=~/Library/Android/sdk/ndk/28.2.13676358` (NDK 28.2 works; the scripts default to 27.3).
+   - Gradle 8.9 needs JDK 21: `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home` (JDK 26 is too new).
+   - GL thunks against gl4es (recipe in `docs/hotd4/QUEST.md`): `llvm-nm` the exports of `../deps/gl4es/lib/libGL.a`, then `gen_gl_thunks.py --exports ... > games/vt3/generated/recomp_gl_thunks_android.c`. Redo this after every re-lift.
+   - `quest/build.sh vt3`, then `quest/install.sh vt3 <disk0>` (copies about 1.8 GB to `/sdcard/VirtuaTennis3`).
+   Launcher icons are hotd4 placeholders. The lever controls (thumbsticks) are untested.
 4. **Vulkan renderer** — untested for VT3 (needs a shader pack via `quest/build_vulkan.py`).
 5. **Other games** (hotd4, lgj, gse) have not been rebuilt against the toolkit changes above. The lifter changes (16-bit push, x87 rounding) affect every game and should be regression-checked.
 6. `lindbergh_nvram.bin` is written beside the executable; the card-reader message is Japanese-only (cabinet language setting).
