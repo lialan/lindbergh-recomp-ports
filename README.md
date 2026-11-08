@@ -6,7 +6,7 @@ executables to native code: on macOS, and standalone in VR on Meta Quest.**
 Each game's code is lifted to C by
 [**lindberghrecomp**](https://github.com/sp00nznet/lindberghrecomp) and built
 against its runtime, which stands in for the cabinet: its GL, sound, gun and
-board. Nothing is emulated. Five games so far; more will follow, each in its
+board. Nothing is emulated. Six games so far; more will follow, each in its
 own folder under `games/`.
 
 > **No game data here.** No executables, no discs, no filesystem images, no
@@ -42,16 +42,17 @@ home of sp00nznet's recomp projects.
 | [Let's Go Jungle!](docs/lgj/QUEST.md) (2006) | plays, 60 fps, 16:9 | plays, a bit buggy: experimental release |
 | [The House of the Dead 4 Special](docs/hotd4sp/QUEST.md) (2006) | plays, 60 fps, 16:9 | plays, released |
 | [The House of the Dead EX](docs/hotdex/MACOS.md) | experimental, 16:9 | — |
+| [Virtua Tennis 3](docs/VT3_PORTING_GUIDE.md) (2006), ported by [Christoph Helms (mrchrisster)](https://github.com/mrchrisster) | plays, 60 fps, 16:9 (OpenGL renderer) | APK builds, not yet tested on a headset |
 
 An experimental [HOTD4 Windows PC VR build](docs/hotd4/WINDOWS-PCVR.md) uses the
 shared runtime through OpenXR. It cross-compiles; Windows headset validation
 is still pending.
 
-On the Mac all five run in 16:9. **Ghost Squad Evolution** draws its 3D wider
+On the Mac all six run in 16:9. **Ghost Squad Evolution** draws its 3D wider
 than the cabinet's 4:3 and moves its HUD to the screen's edges; menus stay
 4:3 (`LINDBERGH_WIDE=0` brings back the arcade picture). **The House of the
-Dead 4**, **Let's Go Jungle!**, **The House of the Dead 4 Special** and
-**The House of the Dead EX** run in
+Dead 4**, **Let's Go Jungle!**, **The House of the Dead 4 Special**,
+**The House of the Dead EX** and **Virtua Tennis 3** run in
 their boards' own 1360x768 widescreen mode.
 
 | Ghost Squad Evolution | The House of the Dead 4 |
@@ -132,6 +133,9 @@ cd lindbergh-recomp-ports
 
 ./scripts/build-macos.sh hotdex /path/to/hotdex     # the folder holding elf/ and fs/
 ./scripts/run-macos.sh   hotdex /path/to/hotdex
+
+./scripts/build-macos.sh --opengl vt3 /path/to/vt3/disk0   # OpenGL only so far
+./scripts/run-macos.sh   --opengl vt3 /path/to/vt3/disk0
 ```
 
 `build-macos.sh` lifts the game into the gitignored `games/<game>/generated/`
@@ -153,6 +157,7 @@ default is Vulkan on macOS and Android, OpenGL elsewhere.
 | Aim / fire / reload | mouse / left button / right button (or move the pointer off the window) |
 | Coin / Start | `5` / `1` (player two: `6` / `2`); The House of the Dead 4 games take two credits |
 | Action button, fire mode (Ghost Squad) | `Space`, `F` |
+| Move, topspin / lob / slice (Virtua Tennis 3) | arrows, `Z` / `X` / `C` |
 | Mute | `M` |
 | Test / Service | `T` / `S` |
 
@@ -160,6 +165,9 @@ The menu bar rebinds controls, calibrates aim, and sets sound and language.
 In **The House of the Dead EX**, `Space` (the rebindable Action button)
 presses the pedal. Its macOS port is experimental; see the
 [validation notes](docs/hotdex/MACOS.md).
+**Virtua Tennis 3** runs on the OpenGL renderer only so far; its
+[porting guide](docs/VT3_PORTING_GUIDE.md) covers status, extraction and
+diagnostics.
 Runtime switches (`LINDBERGH_*`) are listed in
 [the toolkit's docs](https://github.com/sp00nznet/lindberghrecomp/blob/main/docs/instruments.md).
 
@@ -199,12 +207,14 @@ every game whose lifted code is there.
 ## Credits and license
 
 Built on sp00nznet's work; see [Thank you, sp00nznet](#thank-you-sp00nznet).
+The Virtua Tennis 3 port is by
+[Christoph Helms (mrchrisster)](https://github.com/mrchrisster). Thank you!
 Upstream's Windows build and its notes are in
 [docs/ghostsquadevolution/WINDOWS.md](docs/ghostsquadevolution/WINDOWS.md).
 
 The host and the recompilation toolchain are original work, MIT-licensed.
 **No game data, no disc images, no keys, and no circumvention of anything.**
 *Ghost Squad Evolution*, *The House of the Dead 4*, *The House of the Dead 4
-Special*, *The House of the Dead EX* and *Let's Go Jungle!* are © Sega; this is an
+Special*, *The House of the Dead EX*, *Let's Go Jungle!* and *Virtua Tennis 3* are © Sega; this is an
 independent, non-commercial preservation project. To help, read
 [CONTRIBUTING.md](CONTRIBUTING.md) first.
