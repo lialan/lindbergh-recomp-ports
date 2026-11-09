@@ -364,6 +364,21 @@ Blockers seen: the **Guardian boundary dialog** (logcat `GuardianDialogActivity`
 
 ---
 
+## 7.5 The headset settings panel on a lever cabinet (2026-11-09)
+
+The left controller's menu button (or the other hand's upper button held for a second) opens the settings panel. On a lever cabinet (`game_profile.joystick`, VT3) it now:
+- **Can be used:** while it is open, the right controller points at it with a beam (no gun model, sight or flash) and the trigger chooses. Before, lever mode skipped the aiming code, so the panel opened but nothing could be clicked.
+- **Shows only rows that apply:** no sight, laser, crosshair, gun model, gun hand or dual wield.
+- **Frame rate counter** (was "Show stats"): the frame rate readout, as before.
+- **Arcade overlays: Shown / Hidden** (only for games that can hide them, `g_arcade_overlay_hooks`), saved as `overlays on|off` with the other settings and applied live. `LINDBERGH_ARCADE_OVERLAYS=0` hides them for a run (also on macOS). For VT3 (`hle_sega.c`):
+  - `credit::draw` skipped: CREDIT(S), INSERT COIN(S), PRESS START BUTTON, TO START / TO CONTINUE.
+  - `CCardSlotWindowManager::window_open`, `window_slot`, `window_slot_usecard` not called: the card reader's "card cannot be used" messages and icons at the top. Turning overlays back on brings these back with the next window the game opens.
+  - The card information board (`ab_card_info`, a table of 3 `{font, text}` at `+0x14`): its texts ("CREDIT 0", "INSERT COIN(S)") pointed at an empty string, the originals put back when shown.
+  - Not hidden: the character select's "insert your card into the slot" prompt (part of that screen).
+  - Dead ends: `CCardSlotWindowManager::draw` is a stub; scaling the card board to zero with `AbHandle::setMatrix` did not hide it, and doing it every frame crashed.
+
+The panel is now 20 rows (`XM_ROWS`, `XM_H` 824).
+
 ## 8. Future: Immersive Mode (planned)
 
 Today the match is drawn as a flat picture on a screen in front of the player (the 2D "theatre" path in `stereo.c` / `host_xr.c` `xo_draw_screen`). The goal is to make it feel like being in the game.
