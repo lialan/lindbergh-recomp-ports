@@ -519,10 +519,10 @@ index b0f02993..2daf81c9 100644
          if((hardext.npot==1 || hardext.npot==2) && (!tex->actual.wrap_s || !tex->actual.wrap_t || !wrap_npot(tex->actual.wrap_s) || !wrap_npot(tex->actual.wrap_t))) {
 diff --git a/src/gl/multiview.c b/src/gl/multiview.c
 new file mode 100644
-index 00000000..967e7fec
+index 00000000..d8ad74d7
 --- /dev/null
 +++ b/src/gl/multiview.c
-@@ -0,0 +1,798 @@
+@@ -0,0 +1,799 @@
 +// multiview.c - both eyes of a VR headset in one pass (see multiview.h).
 +//
 +// Shaders: what gl4es makes of every shader is GLSL ES 1.00, and multiview
@@ -554,6 +554,7 @@ index 00000000..967e7fec
 +#include "../glx/hardext.h"
 +#include "gl4es.h"
 +#include "glstate.h"
++#include "init.h"
 +#include "loader.h"
 +#include "string_utils.h"
 +
@@ -2083,7 +2084,7 @@ index 25d2d742..9368a06e 100644
          if(level) {
              noerrorShim();
 diff --git a/src/gl/texture_params.c b/src/gl/texture_params.c
-index 96e07205..32f24155 100644
+index 96e07205..7330caec 100644
 --- a/src/gl/texture_params.c
 +++ b/src/gl/texture_params.c
 @@ -1,4 +1,5 @@
@@ -2092,7 +2093,47 @@ index 96e07205..32f24155 100644
  
  #include "../glx/hardext.h"
  #include "../glx/streaming.h"
-@@ -861,7 +862,7 @@ void realize_textures(int drawing) {
+@@ -291,13 +292,37 @@ GLenum get_texture_wrap_t(gltexture_t* texture, glsampler_t *sampler)
+ // TODO: also glTexParameterf(v)?
+ void APIENTRY_GL4ES gl4es_glTexParameterfv(GLenum target, GLenum pname, const GLfloat *params) {
+     DBG(printf("glTexParameterfv(%s, %s, [%f(%s)...])\n", PrintEnum(target), PrintEnum(pname), params[0], PrintEnum(params[0]));)
+-    if(!glstate->list.pending) {
+-        PUSH_IF_COMPILING(glTexParameterfv);
++    if(!glstate->list.pending && glstate->list.active) {
++        // Into a display list: the values, copied. The list kept the pointer,
++        // and glTexParameteri/iv hand one to a float on their own stack - every
++        // replay read a dead slot, mostly 0 (Virtua Tennis 3 sets its textures'
++        // wrap in lists: 1,500 wraps of 0 a session, its prize counter's
++        // GL_REPEAT never arrived and the rolled digits vanished).
++        GLfloat* copy = (GLfloat*)malloc(4 * sizeof(GLfloat));
++        memset(copy, 0, 4 * sizeof(GLfloat));
++        copy[0] = params[0];
++        if(pname == GL_TEXTURE_BORDER_COLOR) memcpy(copy, params, 4 * sizeof(GLfloat));
++        NewStage(glstate->list.active, STAGE_GLCALL);
++        push_glTexParameterfv(target, pname, copy);
++        noerrorShim();
++        return;
+     }
+     noerrorShim();
+     const GLint itarget = what_target(target);
+     const GLuint rtarget = map_tex_target(target);
+     gltexture_t *texture = glstate->texture.bound[glstate->texture.active][itarget];
++    if((pname == GL_TEXTURE_WRAP_S || pname == GL_TEXTURE_WRAP_T || pname == GL_TEXTURE_WRAP_R)) {
++        // A wrap that is no wrap mode is refused, as a desktop driver does,
++        // and the texture keeps the one it had. Stored, it became
++        // CLAMP_TO_EDGE (get_texture_wrap): Virtua Tennis 3 sets 0 on its
++        // prize counter's digit strip after GL_REPEAT, and the strip, scrolled
++        // below 0, sampled its empty edge - the rolled digits vanished.
++        GLenum w = (GLenum)params[0];
++        if(w != GL_REPEAT && w != GL_CLAMP && w != GL_CLAMP_TO_EDGE && w != GL_CLAMP_TO_BORDER && w != GL_MIRRORED_REPEAT_OES) {
++            errorShim(GL_INVALID_ENUM);
++            return;
++        }
++    }
+     if(!samplerParameterfv(&texture->sampler, pname, params)) {
+         LOAD_GLES(glTexParameterfv);
+         GLint param = params[0];
+@@ -861,7 +886,7 @@ void realize_textures(int drawing) {
  #endif
      for (int i=0; i<glstate->bound_changed; i++) {
          // get highest priority texture unit
@@ -2101,7 +2142,7 @@ index 96e07205..32f24155 100644
          int tgt = ENABLED_TEX2D; // default to TEX2D
          if(IS_TEX3D(tmp))
              tgt = ENABLED_TEX3D;
-@@ -941,6 +942,7 @@ void realize_textures(int drawing) {
+@@ -941,6 +966,7 @@ void realize_textures(int drawing) {
          realize_1texture(target, i, tex, glstate->samplers.sampler[i]);
      }
      glstate->bound_changed = 0;

@@ -13,6 +13,9 @@
 #                 side by side; 1 point in 10 otherwise): broken on the Quest,
 #                 black background and squashed players. Frames every 20
 #   replay        every point is replayed: replay camera, court logo pane
+#   prize         1P wins every point from 40-0, so the match is won in two points
+#                 and the result slate's prize-money counter rolls (its
+#                 digits vanish on the Quest). Frames every 20
 #
 # The menus are driven by script (coin, start, Z through the selects, Enter
 # on court select); the jump itself is LINDBERGH_VT3_ROUND / _POINTS /
@@ -42,8 +45,10 @@ case "$SCENE" in
     round[0-9]*) JUMP="LINDBERGH_VT3_ROUND=${SCENE#round}" ;;
     forty)       JUMP="LINDBERGH_VT3_POINTS=3,0" ;;
     replay)      JUMP="LINDBERGH_FORCE_REPLAY=1" ;;
+    prize)       JUMP="LINDBERGH_VT3_WIN=1
+LINDBERGH_VT3_POINTS=3,0"; SHOT_FROM=1900 SHOT_EVERY=20 ;;
     splitreplay) JUMP="LINDBERGH_VT3_SPLIT=1"; SHOT_FROM=2400 SHOT_EVERY=20 ;;
-    *)           die "unknown scene '$SCENE' (tournament3, round<N>, forty, replay, splitreplay)" ;;
+    *)           die "unknown scene '$SCENE' (tournament3, round<N>, forty, replay, splitreplay, prize)" ;;
 esac
 JUMP="$JUMP
 LINDBERGH_VT3_LOG=1

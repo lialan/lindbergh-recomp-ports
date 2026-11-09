@@ -195,7 +195,7 @@ lindberghrecomp runtime:
    - **The match is shown on a flat panel**, not as a 3D world (see Section 8).
    - The menu-to-court transition shows one tilted frame (world mode starting a frame early).
    - ~~**Crash at the start of the third tournament**~~: **game data, not code.** Road to the Championship round 2 (the third tournament) is against **James Blake**, whose base model is one of the empty files from the truncated image (Section 1). The game opens it at boot (`fopen ... -> ok`, 0 bytes read), and his scene entry is NULL when the match loads: guest `0x18` in `TScene::SceneDatabase::executeManager()` <- `Framework::execute()`. It reproduces on **macOS too**, in ~30 s with `scripts/vt3-repro.sh tournament3 mac <disk0>`. Round 0 (Henman) and round 1 (Hewitt) jumped to the same way play normally. **Fixed with Rev. C's data** (Section 1): on the merged tree, round 2 loads Blake at the French Cup (Stage 3) and plays (macOS, 2026-11-09).
-   - **Prize money counter is empty** (the HUD's prize money digits draw nothing).
+   - ~~**Prize money counter is empty**~~ — **fixed 2026-11-09** (`quest/gl4es.patch`). On the result slate, each digit is a 32x512 strip scrolled by `program.local[7]` (`va_8 * local[6] + local[7]`, offsets -0.1 to -1), so the texture coordinate goes below 0 and relies on `GL_REPEAT`. VT3 sets its textures' wrap inside display lists with `glTexParameteri`. gl4es turns that into `glTexParameterfv` with a pointer to a float on its own stack, and **recorded the pointer, not the value, into the list**: every replay read a dead stack slot, mostly 0 (about 1,500 wraps of 0 per session). The repeat never arrived, so the rolled digits sampled the strip's empty edge. gl4es now copies the values into the list, and refuses a wrap that is no wrap mode, as a desktop driver does. Any texture parameter VT3 sets in a list was affected, so other textures may look different now. Reach the slate with `scripts/vt3-repro.sh prize` (1P wins every point from 40-0).
    - ~~**The two-player camera after a point: black background, players squashed**~~ — **fixed 2026-11-09** (`stereo.c`). After a point, `camera::initWinlose()` picks the split-screen camera when its first `getRandMT_U32() % 10` is 0 (singles), so about 1 point in 10. Each frame, the game clears **depth only** with a half-screen viewport (`0,0 680x768`, then `680,0 680x768`) and draws that player in the half. In the headset the pbuffer is the eyes, and `stereo.c` took any part-screen clear for the start of a "side pass" (another game's colour-cleared reflection passes). Both halves went into an offscreen buffer that's never shown. Now only a clear that includes colour starts a side pass, and a whole-screen clear still ends one. Reach the shot on every point with `LINDBERGH_VT3_SPLIT=1` (`scripts/vt3-repro.sh splitreplay`). **Still open:** the right pane shows a reddish, see-through band of crowd over part of the court near the middle, which macOS does not have (probably the screen blur/composite pass).
    - The end-of-game split ("GAME 1P 1-0") renders correctly on the Quest.
    - **The court logo shown in replays has a white pane behind it that does not rotate with the logo** - a quad drawn with a different transform than the logo (likely a 2D/HUD-classified pass beside a 3D one, `LINDBERGH_DRAW_LOG` on a replay frame shows which).
@@ -264,6 +264,8 @@ Not save states: a full snapshot would have to restore the GL driver's objects, 
 | `LINDBERGH_VT3_POINTS=a,b` | Every game starts at those points (`3,0` = 40-0) |
 | `LINDBERGH_VT3_LOG=1` | Each matching, next round and new game, with the frame |
 | `LINDBERGH_VT3_SPLIT=1` | Every point ends on the split-screen camera (normally 1 point in 10): the first `getRandMT_U32()` inside `camera::initWinlose` returns 0 |
+| `LINDBERGH_VT3_WIN=1` | 1P wins every point (`match+0x61`, the point's winner, set to 0 before `match::calcPoint`). With `LINDBERGH_VT3_POINTS=3,0`, a match is won in two points |
+| `LINDBERGH_VT3_PRIZE_TRACE=<frames>` | `LINDBERGH_TRACE_VP` starts that many frames after the result slate's first prize coin sound (`sound::playSe_prize_coin`) |
 
 ```bash
 ./scripts/vt3-repro.sh tournament3 mac <disk0>     # Blake crash, ~30 s
@@ -291,7 +293,7 @@ The script drives the menus, runs for a set time, and leaves the log and frames 
 | `LINDBERGH_XR_PROF=1` | Quest: per 60 frames, the game's GPU work (a `glFinish` on entry to the frame's end), the eye copies, `xrEndFrame` |
 | `LINDBERGH_FRAMEMAP=<frame>` | Quest: every draw of that frame with its GPU time (a finish after each), target, viewport and program pair |
 | `LINDBERGH_SKIP_DRAWS=offscreen\|main\|all` | Quest: whole groups of draws left out, to find where GPU time goes |
-| `LINDBERGH_DRAW_LOG=<frame>[-<last>]` | Quest: each draw's classification (`persp`, `hud`, target) in `stereo.c`, and each clear with its viewport and side-pass state (`[units] ... clear`) |
+| `LINDBERGH_DRAW_LOG=<frame>[-<last>]` | Quest: each draw's classification (`persp`, `hud`, target), colour mask and stencil state in `stereo.c`, and each clear with its viewport and side-pass state (`[units] ... clear`) |
 | `LINDBERGH_CLEAR_LOG=1` | Quest: colour clears of the eyes while a world is drawn |
 | `LINDBERGH_GLPROF=1` (+ `GLPROF_SLOW=<ms>`) | Quest: CPU time per GL call and the slowest frames |
 | `LINDBERGH_SHADOW_BIAS=<depth>` | Quest: bias off the reference depth in the in-shader shadow compare (default: profile `vr.shadow_bias`, 0) |
@@ -306,6 +308,8 @@ The script drives the menus, runs for a set time, and leaves the log and frames 
 | `LINDBERGH_FORCE_SHADOW=1 LINDBERGH_SHADER_COMPARE=1` (desktop) | The Quest's in-shader shadow compare on macOS, to check it against the driver's |
 | `LINDBERGH_COPY_LOG=1` | Each distinct copy from the framebuffer into a texture |
 | `LINDBERGH_SHOT_BOTH=1` | Quest: `GAME_SHOT` / `XR_SHOT` also save the right eye (`game_<frame>_r.ppm`, `xrshot_<frame>_r.ppm`) |
+| `LINDBERGH_ARB_LOCAL_LOG=<index>[:<program>]` | Each write of that program local (frame, thread, program, value), and what each draw of the program uploads for it, while a trace window is open |
+| `LINDBERGH_TRACE_VP` (additions) | Also prints `local[6]`/`local[7]` and the draw's texture coordinate sources: generic attribute 8 (enabled, buffer, stride, first four values) and unit 0's classic texcoord array |
 
 ### Method that has worked
 Capture frames, then binary-search the pipeline with readbacks: which draw, which target, which texture, which constants, which inputs. Never query GL state between `glBegin` and `glEnd`: the query fails silently and misleads. Each bug so far was a one-line semantic gap between NVIDIA's 2006 GL and Apple's (attribute aliasing, out-of-range reads, local-parameter limits, rounding mode, 16-bit pushes), found by measuring rather than guessing.
