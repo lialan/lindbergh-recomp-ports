@@ -19,6 +19,8 @@ static const LgGameProfile k_profile = {
         .width = 1360, .height = 768,
         .scale = 1,
         .camera_in_constants = 1,
+        .camera_in_locals = 1,      /* Cg's g_transform_mat: program.local[0..3] */
+        .depth_tex_shadow = 1,      /* the players' shadow map, unit 0 */
         .depth_read = LG_DEPTH_AUTO,
         .gl_thread = 1,
     },

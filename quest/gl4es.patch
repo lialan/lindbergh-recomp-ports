@@ -1,5 +1,5 @@
 diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
-index 0ddf160..4e118f5 100644
+index 0ddf1607..4e118f5e 100644
 --- a/src/CMakeLists.txt
 +++ b/src/CMakeLists.txt
 @@ -50,6 +50,7 @@ SET(GL_SRC
@@ -11,7 +11,7 @@ index 0ddf160..4e118f5 100644
      ${CMAKE_CURRENT_SOURCE_DIR}/gl/shaderconv.c
      ${CMAKE_CURRENT_SOURCE_DIR}/gl/shader_hacks.c
 diff --git a/src/gl/buffers.c b/src/gl/buffers.c
-index 4ea062c..563d8df 100644
+index 4ea062cb..563d8dfd 100644
 --- a/src/gl/buffers.c
 +++ b/src/gl/buffers.c
 @@ -1,3 +1,4 @@
@@ -43,7 +43,7 @@ index 4ea062c..563d8df 100644
      for (int i=0; i<hardext.maxvattrib; ++i) {
          vertexattrib_t *v = &glstate->vao->vertexattrib[i];
 diff --git a/src/gl/drawing.c b/src/gl/drawing.c
-index 498ecc5..b8910cb 100644
+index 498ecc5a..b8910cb2 100644
 --- a/src/gl/drawing.c
 +++ b/src/gl/drawing.c
 @@ -1,3 +1,4 @@
@@ -62,7 +62,7 @@ index 498ecc5..b8910cb 100644
  
              #define TEXTURE(A) gl4es_glClientActiveTexture(A+GL_TEXTURE0);
 diff --git a/src/gl/enable.c b/src/gl/enable.c
-index 142223b..90ae5b1 100644
+index 142223be..90ae5b1d 100644
 --- a/src/gl/enable.c
 +++ b/src/gl/enable.c
 @@ -407,6 +407,7 @@ GLboolean APIENTRY_GL4ES gl4es_glIsEnabled(GLenum cap) {
@@ -74,7 +74,7 @@ index 142223b..90ae5b1 100644
          clientisenabled(GL_VERTEX_ARRAY, vertexattrib[ATT_VERTEX].enabled);
          clientisenabled(GL_NORMAL_ARRAY, vertexattrib[ATT_NORMAL].enabled);
 diff --git a/src/gl/fpe.c b/src/gl/fpe.c
-index c21bcf1..17da267 100644
+index c21bcf1f..17da2673 100644
 --- a/src/gl/fpe.c
 +++ b/src/gl/fpe.c
 @@ -1,8 +1,13 @@
@@ -444,7 +444,7 @@ index c21bcf1..17da267 100644
          fpe_program(ispoint);
          if(glstate->gleshard->program != glstate->fpe->prog)
 diff --git a/src/gl/fpe_shader.c b/src/gl/fpe_shader.c
-index dbe87a7..a9a9fd0 100644
+index dbe87a7c..a9a9fd0e 100644
 --- a/src/gl/fpe_shader.c
 +++ b/src/gl/fpe_shader.c
 @@ -1,4 +1,5 @@
@@ -485,7 +485,7 @@ index dbe87a7..a9a9fd0 100644
                  ShadAppend(buff);
              }
 diff --git a/src/gl/framebuffers.c b/src/gl/framebuffers.c
-index b0f0299..2daf81c 100644
+index b0f02993..2daf81c9 100644
 --- a/src/gl/framebuffers.c
 +++ b/src/gl/framebuffers.c
 @@ -1,3 +1,4 @@
@@ -519,10 +519,10 @@ index b0f0299..2daf81c 100644
          if((hardext.npot==1 || hardext.npot==2) && (!tex->actual.wrap_s || !tex->actual.wrap_t || !wrap_npot(tex->actual.wrap_s) || !wrap_npot(tex->actual.wrap_t))) {
 diff --git a/src/gl/multiview.c b/src/gl/multiview.c
 new file mode 100644
-index 0000000..f812ec3
+index 00000000..f3ec40d3
 --- /dev/null
 +++ b/src/gl/multiview.c
-@@ -0,0 +1,611 @@
+@@ -0,0 +1,640 @@
 +// multiview.c - both eyes of a VR headset in one pass (see multiview.h).
 +//
 +// Shaders: what gl4es makes of every shader is GLSL ES 1.00, and multiview
@@ -1134,9 +1134,38 @@ index 0000000..f812ec3
 +int gl4es_drawprof_on;
 +double gl4es_now_ns(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1e9 + t.tv_nsec; }
 +double gl4es_bufprof_copy, gl4es_bufprof_bytes;
++
++// The texture units whose bound 2D texture compares depth, from gl4es' own
++// state (no GL calls: asked before every draw of a translated program).
++int gl4es_depth_is_shadow;     // the game's depth textures read through 2D are shadow maps
++static int is_depth_format(GLenum f)
++{
++    return f == GL_DEPTH_COMPONENT || f == 0x81A5 || f == 0x81A6 || f == 0x81A7 || f == 0x8CAC
++        || f == 0x84F9 /*DEPTH_STENCIL*/ || f == 0x88F0;
++}
++unsigned gl4es_compare_units(void)
++{
++    unsigned m = 0;
++    for (int u = 0; u < MAX_TEX && u < 16; u++) {
++        gltexture_t* t = glstate->texture.bound[u][ENABLED_TEX2D];
++        if (t && t->glname && (t->lg_shadow || (t->sampler.compare && t->sampler.compare != GL_NONE)
++                               || (gl4es_depth_is_shadow && (is_depth_format(t->internalformat) || is_depth_format(t->format)))))
++            m |= 1u << u;
++    }
++    return m;
++}
++
++// The 2D texture on this unit is read as a shadow map (its own compare turned
++// off, done in the shader instead): it stays one for gl4es_compare_units.
++void gl4es_mark_shadow(int unit)
++{
++    if (unit < 0 || unit >= MAX_TEX) return;
++    gltexture_t* t = glstate->texture.bound[unit][ENABLED_TEX2D];
++    if (t) t->lg_shadow = 1;
++}
 diff --git a/src/gl/multiview.h b/src/gl/multiview.h
 new file mode 100644
-index 0000000..68a8e70
+index 00000000..68a8e70f
 --- /dev/null
 +++ b/src/gl/multiview.h
 @@ -0,0 +1,47 @@
@@ -1188,7 +1217,7 @@ index 0000000..68a8e70
 +
 +#endif // _GL4ES_MULTIVIEW_H_
 diff --git a/src/gl/oldprogram.c b/src/gl/oldprogram.c
-index 39aa58a..04897f5 100644
+index 39aa58a8..04897f50 100644
 --- a/src/gl/oldprogram.c
 +++ b/src/gl/oldprogram.c
 @@ -177,6 +177,7 @@ void APIENTRY_GL4ES gl4es_glProgramStringARB(GLenum target, GLenum format, GLsiz
@@ -1200,7 +1229,7 @@ index 39aa58a..04897f5 100644
          DBG(printf("Error with GLSL->GLSL:ES conversion\n");)
          errorShim(GL_INVALID_OPERATION);
 diff --git a/src/gl/preproc.c b/src/gl/preproc.c
-index 5b8e8b0..6a6ee0b 100644
+index 5b8e8b06..6a6ee0b0 100644
 --- a/src/gl/preproc.c
 +++ b/src/gl/preproc.c
 @@ -802,10 +802,10 @@ char* preproc(const char* code, int keepcomments, int gl_es, extensions_t* exts,
@@ -1217,7 +1246,7 @@ index 5b8e8b0..6a6ee0b 100644
                  }
          }
 diff --git a/src/gl/program.c b/src/gl/program.c
-index 2eaeb02..adf0960 100644
+index 2eaeb02b..adf09602 100644
 --- a/src/gl/program.c
 +++ b/src/gl/program.c
 @@ -1,4 +1,6 @@
@@ -1326,7 +1355,7 @@ index 2eaeb02..adf0960 100644
              errorShim(err);
              return;
 diff --git a/src/gl/program.h b/src/gl/program.h
-index a788da4..13170f9 100644
+index a788da4b..13170f90 100644
 --- a/src/gl/program.h
 +++ b/src/gl/program.h
 @@ -113,6 +113,7 @@ typedef struct {
@@ -1355,7 +1384,7 @@ index a788da4..13170f9 100644
  
  KHASH_MAP_DECLARE_INT(programlist, program_t *);
 diff --git a/src/gl/shader.c b/src/gl/shader.c
-index 0bde8f1..67fb486 100644
+index 0bde8f10..67fb4869 100644
 --- a/src/gl/shader.c
 +++ b/src/gl/shader.c
 @@ -1,3 +1,4 @@
@@ -1509,7 +1538,7 @@ index 0bde8f1..67fb486 100644
                  errorGL();
              } else {
 diff --git a/src/gl/shader.h b/src/gl/shader.h
-index e080eee..ab0e779 100644
+index e080eeea..ab0e7792 100644
 --- a/src/gl/shader.h
 +++ b/src/gl/shader.h
 @@ -33,6 +33,8 @@ struct shader_s {
@@ -1532,7 +1561,7 @@ index e080eee..ab0e779 100644
  GLboolean APIENTRY_GL4ES gl4es_glIsShader(GLuint shader);
  void APIENTRY_GL4ES gl4es_glGetShaderInfoLog(GLuint shader, GLsizei maxLength, GLsizei *length, GLchar *infoLog);
 diff --git a/src/gl/shaderconv.c b/src/gl/shaderconv.c
-index 3d0f46b..fda13cf 100644
+index 3d0f46bd..fda13cf8 100644
 --- a/src/gl/shaderconv.c
 +++ b/src/gl/shaderconv.c
 @@ -1,4 +1,5 @@
@@ -1561,7 +1590,7 @@ index 3d0f46b..fda13cf 100644
        int change_textmat = notexarray;
        if(!change_textmat) {
 diff --git a/src/gl/string_utils.c b/src/gl/string_utils.c
-index fb04824..c58fa64 100644
+index fb048247..c58fa64f 100644
 --- a/src/gl/string_utils.c
 +++ b/src/gl/string_utils.c
 @@ -137,9 +137,17 @@ char* gl4es_resize_if_needed(char* pBuffer, int *size, int addsize) {
@@ -1586,7 +1615,7 @@ index fb04824..c58fa64 100644
  }
  
 diff --git a/src/gl/texture.c b/src/gl/texture.c
-index c0d479a..07c7905 100644
+index c0d479a8..07c7905e 100644
 --- a/src/gl/texture.c
 +++ b/src/gl/texture.c
 @@ -1,4 +1,5 @@
@@ -1667,10 +1696,10 @@ index c0d479a..07c7905 100644
          if(bound->base_level == level && !(bound->max_level==level && level==0)) {
              int leveln = level, nw = width, nh = height, xx=xoffset, yy=yoffset;
 diff --git a/src/gl/texture.h b/src/gl/texture.h
-index 33e140a..19830b9 100644
+index 33e140a3..c08ecd7b 100644
 --- a/src/gl/texture.h
 +++ b/src/gl/texture.h
-@@ -156,6 +156,11 @@ typedef struct {
+@@ -156,6 +156,12 @@ typedef struct {
      glsampler_t sampler;    // internal sampler if not superseded by glBindSampler
      glsampler_t actual;     // actual sampler
      float fbtex_ratio; // Lower rendering resolution
@@ -1679,11 +1708,12 @@ index 33e140a..19830b9 100644
 +    GLenum mv_min, mv_mag, mv_ws, mv_wt;    // its filters and wraps as set
 +    int mv_layered;     // multiview.c: a 2D texture drawn into, sampled by layer too
 +    int native_levels;  // DXT given to the driver as it is: mip levels so far
++    int lg_shadow;      // multiview.c: a shadow map, its compare done in the shader
  } gltexture_t;
  
  KHASH_MAP_DECLARE_INT(tex, gltexture_t *);
 diff --git a/src/gl/texture_compressed.c b/src/gl/texture_compressed.c
-index 25d2d74..f3e806c 100644
+index 25d2d742..f3e806c5 100644
 --- a/src/gl/texture_compressed.c
 +++ b/src/gl/texture_compressed.c
 @@ -1,3 +1,6 @@
@@ -1890,7 +1920,7 @@ index 25d2d74..f3e806c 100644
          if(level) {
              noerrorShim();
 diff --git a/src/gl/texture_params.c b/src/gl/texture_params.c
-index 96e0720..32f2415 100644
+index 96e07205..32f24155 100644
 --- a/src/gl/texture_params.c
 +++ b/src/gl/texture_params.c
 @@ -1,4 +1,5 @@
@@ -1917,7 +1947,7 @@ index 96e0720..32f2415 100644
  
  //Direct wrapper
 diff --git a/src/gl/texture_read.c b/src/gl/texture_read.c
-index 2d70cd9..e1433ae 100644
+index 2d70cd9d..e1433aeb 100644
 --- a/src/gl/texture_read.c
 +++ b/src/gl/texture_read.c
 @@ -98,6 +98,143 @@ void APIENTRY_GL4ES gl4es_glCopyTexImage2D(GLenum target,  GLint level,  GLenum
@@ -2119,7 +2149,7 @@ index 2d70cd9..e1433ae 100644
                  LOAD_GLES2_OR_OES(glGenerateMipmap);
                  if(gles_glGenerateMipmap)
 diff --git a/src/gl/uniform.c b/src/gl/uniform.c
-index 98b5614..ad9a640 100644
+index 98b56148..ad9a640b 100644
 --- a/src/gl/uniform.c
 +++ b/src/gl/uniform.c
 @@ -6,6 +6,8 @@

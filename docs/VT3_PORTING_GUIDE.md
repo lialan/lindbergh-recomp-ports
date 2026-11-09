@@ -149,7 +149,7 @@ Menus: on the player-select and tournament screens press **Z**; on court select 
 
 ---
 
-## 4. Current Status (2026-11-08)
+## 4. Current Status (2026-11-08, macOS and Quest 3)
 
 ### Works on macOS (OpenGL renderer, `--opengl`)
 
@@ -178,18 +178,11 @@ lindberghrecomp runtime:
 
 1. ~~Replay camera / pre-match intro flat colour~~ — fixed, see Section 5.
 2. ~~Audio~~ — works (confirmed by ear). SEGAAPI is answered by `hle_segaapi.c`; it starts muted, M toggles (or `LINDBERGH_MUTE=0`). `LINDBERGH_SEGA_METER=1` logs the mix peak and voice count every two seconds.
-3. **Quest APK** — builds (`quest/VirtuaTennis3VR.apk`, 25 MB, no game data) but has **not been run on a headset** yet. Build steps on this machine:
-   - `quest/deps.sh` with `ANDROID_NDK=~/Library/Android/sdk/ndk/28.2.13676358` (NDK 28.2 works; the scripts default to 27.3).
-   - Gradle 8.9 needs JDK 21: `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home` (JDK 26 is too new).
-   - GL thunks against gl4es (recipe in `docs/hotd4/QUEST.md`): `llvm-nm` the exports of `../deps/gl4es/lib/libGL.a`, then `gen_gl_thunks.py --exports ... > games/vt3/generated/recomp_gl_thunks_android.c`. Redo this after every re-lift.
-   - `quest/build.sh vt3`, then `quest/install.sh vt3 <disk0>` (copies about 1.8 GB to `/sdcard/VirtuaTennis3`).
-   Launcher icons are hotd4 placeholders.
-
-   **On the headset (2026-11-08):** boots, menus and attract at 60 fps; controls work (right trigger = confirm/topspin, A = lob, B = slice, stick = lever, stick click = start). **Open problems:**
-   - **Only text is visible; the 3D and textured scene is black.** A capture (`LINDBERGH_CAPTURE=<frame>` in `env.txt`) shows the whole match being drawn into the eyes with valid programs, so the loss is later, most likely the post-process composite (the stage that broke on macOS too; under `LINDBERGH_GL4ES` the attribute aliasing in `arbprog.c` takes a different branch). The capture's eye readback fails ("cannot be read through a framebuffer"), and `LINDBERGH_EYE_DUMP` writes nothing after boot; fixing that readback is the next step.
-   - **Match frame rate** was 3-6 fps from ~640 game-thread waits per frame on `glCallList` / client-attrib calls; now queued (0 waits). A match still ran at ~6 fps afterwards, game-thread bound (~150 ms), not yet profiled.
-   - Ruled out as the frame-rate cause: render-target enlargement (`LINDBERGH_XR_TARGET_K=1`), the compositor depth copy (`LINDBERGH_XR_DEPTH=0`), fragment shading (`LINDBERGH_FP_SOLID=1` made it slower).
-   - Testing: runtime options go in `/sdcard/VirtuaTennis3/env.txt`; `LINDBERGH_AUTOSTART` and `LINDBERGH_KEYS` drive the menus. The headset must be worn: it will not place the app on screen otherwise, even with the proximity sensor overridden. First launch into a match compiles ~7.5 s of shaders; later launches ~0.6 s from `/sdcard/VirtuaTennis3/shadercache`.
+3. **Quest 3 (gl4es + OpenXR)** — playable: boots, menus and matches run at a steady **60 fps** with textured 3D, controls work. See Section 7 for what was fixed and how to test without a person. Still open on the headset:
+   - **Player shadows too dark** (worst on the far player). The shadow-map compare now runs in the shader (Section 7.4); it is harder than the Mac driver's filtered compare. `LINDBERGH_SHADOW_BIAS=<depth>` is in the build but not yet tuned on the headset.
+   - **The match is shown as a flat screen** in front of the player, not as a 3D world: `stereo.c` judges VT3's camera "zoomed" (lens ~29, from the combined MVP in program locals) and falls back to the flat picture. See Section 8 for where this should go.
+   - The last runs with the shadow variant averaged ~50 fps in some stretches; not yet profiled (`LINDBERGH_XR_PROF=1`, `LINDBERGH_FRAMEMAP=<frame>`).
+   - Launcher icons are hotd4 placeholders.
 4. **Vulkan renderer** — untested for VT3 (needs a shader pack via `quest/build_vulkan.py`).
 5. **Other games** (hotd4, lgj, gse) have not been rebuilt against the toolkit changes above. The lifter changes (16-bit push, x87 rounding) affect every game and should be regression-checked.
 6. `lindbergh_nvram.bin` is written beside the executable; the card-reader message is Japanese-only (cabinet language setting).
@@ -220,7 +213,7 @@ I first concluded the quads lived in display lists and sent texcoords with immed
 ## 6. Working Notes for the Next Agent
 
 ### Repos and branches
-- `lindbergh-recomp-ports` (outer), submodule `lindberghrecomp`, nested `lindberghrecomp/pcrecomp`. Work is on branch **`vt3-port`** in all three, pushed to forks under `mrchrisster` (remote `fork`); upstream is `lialan`. Submodule URLs in `.gitmodules` are relative, so a clone of either owner resolves to that owner's submodules. PRs go inner-first: pcrecomp, lindberghrecomp, then the outer repo.
+- `lindbergh-recomp-ports` (outer), submodule `lindberghrecomp`, nested `lindberghrecomp/pcrecomp`. Work is on branch **`vt3-port`** in all three (Quest work continues on **`vt3-quest`** in lindberghrecomp and the outer repo), pushed to forks under `mrchrisster` (remote `fork`); upstream is `lialan`. Submodule URLs in `.gitmodules` are relative, so a clone of either owner resolves to that owner's submodules. PRs go inner-first: pcrecomp, lindberghrecomp, then the outer repo.
 - Never commit `games/*/generated/` (lifted game code; gitignored) or any game data.
 
 ### Build and run
@@ -257,6 +250,81 @@ Run long tests in the background and stop them by PID; never `killall`.
 | `LINDBERGH_ARB_NOCLAMP=1` | Turns off the relative-index clamp (comparison only) |
 | `LINDBERGH_LIST_LOG=1` | The calls recorded into each display list |
 | `LINDBERGH_VA_LOG=1` | Immediate `glVertexAttrib*ARB` calls and where they are routed |
+| `LINDBERGH_FORCE_SHADOW=1` (desktop) | Depth textures read as 2D become `sampler2DShadow` (the driver compares): the reference for the Quest's in-shader compare |
+| `LINDBERGH_XR_SHOT=<first>,<every>` (+ `XR_SHOT_FULL=1`) | Quest: the left eye as handed to the headset, `xrshot_<frame>.ppm` beside the game (quarter size unless FULL) |
+| `LINDBERGH_XR_PROF=1` | Quest: per 60 frames, the game's GPU work (a `glFinish` on entry to the frame's end), the eye copies, `xrEndFrame` |
+| `LINDBERGH_FRAMEMAP=<frame>` | Quest: every draw of that frame with its GPU time (a finish after each), target, viewport and program pair |
+| `LINDBERGH_SKIP_DRAWS=offscreen\|main\|all` | Quest: whole groups of draws left out, to find where GPU time goes |
+| `LINDBERGH_DRAW_LOG=<frame>` | Quest: each draw's classification (`persp`, `hud`, target) in `stereo.c` |
+| `LINDBERGH_CLEAR_LOG=1` | Quest: colour clears of the eyes while a world is drawn |
+| `LINDBERGH_GLPROF=1` (+ `GLPROF_SLOW=<ms>`) | Quest: CPU time per GL call and the slowest frames |
+| `LINDBERGH_SHADOW_BIAS=<depth>` | Quest: bias off the reference depth in the in-shader shadow compare (default: profile `vr.shadow_bias`, 0) |
 
 ### Method that has worked
 Capture frames, then binary-search the pipeline with readbacks: which draw, which target, which texture, which constants, which inputs. Never query GL state between `glBegin` and `glEnd`: the query fails silently and misleads. Each bug so far was a one-line semantic gap between NVIDIA's 2006 GL and Apple's (attribute aliasing, out-of-range reads, local-parameter limits, rounding mode, 16-bit pushes), found by measuring rather than guessing.
+
+---
+
+## 7. Meta Quest 3 Port (2026-11-08)
+
+### 7.1 Build
+- `quest/deps.sh` with `ANDROID_NDK=~/Library/Android/sdk/ndk/28.2.13676358` (NDK 28.2 works). It applies `quest/gl4es.patch` (multiview, texture targets, shader conversion, and now `gl4es_compare_units` / `gl4es_mark_shadow`) and builds `deps/gl4es-android`. After editing `deps/gl4es`, `cmake --build ../deps/gl4es-android` and regenerate the patch (`git -C ../deps/gl4es add -N src/gl/multiview.[ch] && git -C ../deps/gl4es diff > quest/gl4es.patch`).
+- `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_NDK=... sh quest/build.sh vt3`, then `adb install -r quest/VirtuaTennis3VR.apk`. Game data: `quest/install.sh vt3 <disk0>` (to `/sdcard/VirtuaTennis3`).
+- GL thunks against gl4es: `llvm-nm` the exports of `../deps/gl4es/lib/libGL.a`, then `gen_gl_thunks.py --exports ... > games/vt3/generated/recomp_gl_thunks_android.c`. Redo after every re-lift.
+- The APK holds translated game code: keep it private.
+
+### 7.2 Controls (lever cabinet)
+Right trigger = confirm / topspin, A = lob, B = slice, left stick = 8-way lever, stick click = start. Lever mode turns off the gun, laser, sight and recoil rumble (`xr_controls.c` `lever_buttons`, profile `.joystick = 1`).
+
+### 7.3 Testing without a person
+The headset sleeps and will not show an app when nobody wears it. What works over adb (USB debugging authorised):
+```bash
+adb shell am broadcast -a com.oculus.vrpowermanager.prox_close   # proximity sensor reads "worn"
+adb shell input keyevent KEYCODE_WAKEUP                           # repeat until dumpsys power says Awake
+adb shell am start -n org.lindbergh.vt3.vr/org.lindbergh.vt3.VirtuaTennis3VR
+# ... wait, pull /sdcard/VirtuaTennis3/vt3.log and vt3_Lindbergh/xrshot_*.ppm ...
+adb shell am broadcast -a com.oculus.vrpowermanager.automation_disable   # undo the override
+```
+Runtime options go in `/sdcard/VirtuaTennis3/env.txt` (one `NAME=value` per line). **Empty it afterwards**: a leftover `LINDBERGH_KEYS` keeps pressing Enter at court selection and looks like the game auto-advancing. Menu script used for the Quest (frame:key):
+```bash
+K=""; for f in $(seq 700 120 1500); do K="$K$f:1,"; done; for f in $(seq 1550 90 3600); do K="$K$f:z,"; done
+for f in 2100 2500 2900 3300; do K="$K$((f+45)):"$'\r'","; done
+```
+Blockers seen: the **Guardian boundary dialog** (logcat `GuardianDialogActivity`) keeps the session at READY (states `1 2` in the log) until someone confirms the boundary; don't turn Guardian off from adb, ask the person. A launch sometimes fails silently: check that `vt3.log` is new before reading it.
+
+### 7.4 What was fixed, in order
+1. **GL thread stalls (3-6 fps in menus).** ~640 synchronous waits per frame on `glCallList` and `glPush/PopClientAttrib`; queued as values in `gl_thread.c` (0 waits).
+2. **Black 3D, only text visible.** `stereo.c` decides per draw whether it is world (stereo, perspective) or HUD, from the projection that `arb_env_projection()` reads out of `program.env[0..3]`. VT3's Cg programs keep `g_transform_mat` in **`program.local[0..3]`**, so every draw looked 2D. Profile switch `vr.camera_in_locals` reads the bound vertex program's locals instead (`DRAW_LOG` went from `persp 0` to `persp 1` on all 262 match draws).
+3. **3 fps in a match, GPU-bound (~340 ms/frame).** `XR_PROF` put the time in the game's GPU work; `FRAMEMAP` showed single draws into a 128x128 target taking 36 ms (vertex program 135). The ARB translator copied Cg's 216-entry bone palette (`PARAM c[] = { program.local[0..3], {literal}, program.local[5..215] }`) into a **per-vertex local array** before indexing it with A0; Adreno spills that to scratch memory. Lists that are program.local (or program.env) at their own indices plus a few literals now index the uniform array directly, the literals written into that program's uploaded copy. 60 fps since; macOS unchanged.
+4. **Black players.** Their fragment programs read a 1024x1024 depth texture (`DEPTH_COMPONENT32`, unit 0 or 1) through a plain `2D` target with `texture2DProj`, four taps summed as a soft shadow factor that multiplies all lighting. NVIDIA (and Apple) compare depth there; GLES leaves it undefined and the Quest returned 0. With profile `vr.depth_tex_shadow`, units whose bound 2D texture has a depth format (gl4es state, `gl4es_compare_units`) get a program variant (linked programs are keyed by that unit mask) that compares in the shader, as Let's Go Jungle's `SHADOW2D` path already did; `gl4es_mark_shadow` keeps the texture a shadow map after the runtime turns its own compare off. Players are lit now, but darker than on the Mac (nearest-texel compare vs the driver's filtered one, possibly 16-bit depth from gl4es' unsized `GL_DEPTH_COMPONENT`). Next: tune `LINDBERGH_SHADOW_BIAS`, then a 2x2 bilinear PCF in the shader if bias alone is not enough; compare against `LINDBERGH_FORCE_SHADOW=1` on macOS.
+5. `stereo.c`: after a whole-screen copy of a drawn world, the colour bit of the next eye clear is dropped (VT3 clears before compositing its depth-of-field copy, and that composite is left out in stereo). In the working build, but not tested on its own.
+
+---
+
+## 8. Future: Immersive Mode (planned)
+
+Today the match is drawn as a flat picture on a screen in front of the player (the 2D "theatre" path in `stereo.c` / `host_xr.c` `xo_draw_screen`). The goal is to make it feel like being in the game.
+
+### 8.1 Depth: draw the world in 3D
+- Stop treating VT3's camera as a zoom. `stereo.c` reads a lens of ~29 because `vr.camera_in_locals` hands it the **combined** MVP (projection x view x model), not the projection alone. Split it: per draw, the projection is the part constant across the frame's world draws; or find where the game builds `g_transform_mat` (the Cg parameter set through `cgGLSetMatrixParameterfc`/`cgSetMatrixParameter`) and take the projection and view there, before they are multiplied.
+- With projection and view separate, render the world per eye with the headset's projection and the eye offset applied in view space (what `stereo.c` already does for hotd4's env-held camera), so the court has real depth; keep the HUD on a panel.
+- Scale: a tennis court is 23.77 m; pick a world scale (profile `vr.scale`) so the court is life-size or a "table-top" miniature, both worth trying.
+
+### 8.2 Camera control
+- Phase 1, head-tracked: the game's camera stays the anchor; head pose adds rotation/translation on top (look around the stadium, lean over the net).
+- Phase 2, free / chosen camera: replace the game's view matrix with one the player picks: behind own player (third person), first person at the player's eyes (needs the player's position: read from game memory or from the player's skinned-model root bone in the bone palette), umpire chair, broadcast. The game still renders by its own camera for culling, so a wider view may need culling turned off or the far player's draw forced.
+- Comfort: the broadcast camera moves on its own; in VR that should be smoothed or snapped, with the option to lock it.
+
+### 8.3 In-headset menu
+A runtime menu (the XR overlay already draws a settings panel, `host_xr.c` `menu` / `xo_draw_panel`, opened from the controller) with:
+- Display mode: **Flat screen** (today) / **Immersive 3D** / **Table-top**.
+- Depth strength (IPD scale / world scale), screen distance and size for flat mode.
+- Camera: Game camera / Head-tracked offset / Third person / First person / Umpire, plus recenter.
+- Comfort: camera smoothing, vignette on camera cuts.
+Settings persist through `xr_settings_save` like the existing ones; switches that need a program variant (depth on/off) can rebuild at the next frame.
+
+### 8.4 Order of work
+1. Fix the shadows (Section 7.4 #4).
+2. Separate projection and view from VT3's MVP; get the court drawn in stereo with depth in the existing pipeline, fixed game camera.
+3. Menu entries for flat / immersive / table-top and scale.
+4. Head-tracked camera offset; then chosen cameras.
