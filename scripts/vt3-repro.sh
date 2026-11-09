@@ -9,9 +9,9 @@
 #                 (round 2): the scene-loader crash after two won tournaments
 #   round<N>      ...at round N (0-based), e.g. round4
 #   forty         every game starts at 40-0
-#   splitreplay   40-0, so the first point ends a game and its split-pane
-#                 replay (both players side by side) follows: about frame
-#                 3420 on macOS; broken on the Quest. Frames every 30 around it
+#   splitreplay   every point ends on the split-screen camera (both players
+#                 side by side; 1 point in 10 otherwise): broken on the Quest,
+#                 black background and squashed players. Frames every 20
 #   replay        every point is replayed: replay camera, court logo pane
 #
 # The menus are driven by script (coin, start, Z through the selects, Enter
@@ -42,7 +42,7 @@ case "$SCENE" in
     round[0-9]*) JUMP="LINDBERGH_VT3_ROUND=${SCENE#round}" ;;
     forty)       JUMP="LINDBERGH_VT3_POINTS=3,0" ;;
     replay)      JUMP="LINDBERGH_FORCE_REPLAY=1" ;;
-    splitreplay) JUMP="LINDBERGH_VT3_POINTS=3,0"; SHOT_FROM=3200 SHOT_EVERY=30 ;;
+    splitreplay) JUMP="LINDBERGH_VT3_SPLIT=1"; SHOT_FROM=2400 SHOT_EVERY=20 ;;
     *)           die "unknown scene '$SCENE' (tournament3, round<N>, forty, replay, splitreplay)" ;;
 esac
 JUMP="$JUMP
@@ -91,20 +91,41 @@ quest)
     }
     trap cleanup EXIT
     adb push "$OUT/env.txt" "$HEADSET_DIR/env.txt" >/dev/null
-    adb shell "rm -f $HEADSET_DIR/$LOG $HEADSET_DIR/vt3_Lindbergh/game_*.ppm"
-    adb shell am broadcast -a com.oculus.vrpowermanager.prox_close >/dev/null
-    awake=
-    for _ in $(seq 30); do
-        adb shell dumpsys power | grep -q 'mWakefulness=Awake' && { awake=1; break; }
-        adb shell am broadcast -a com.oculus.vrpowermanager.prox_close >/dev/null
-        adb shell input keyevent KEYCODE_WAKEUP; sleep 1
+    adb shell "rm -f $HEADSET_DIR/$LOG $HEADSET_DIR/vt3_Lindbergh/game_*.ppm $HEADSET_DIR/vt3_Lindbergh/xrshot_*.ppm"
+    # Nobody needs to wear the headset: the proximity sensor is told it is
+    # worn and the display woken. A launch into a sleeping or just-woken
+    # headset can still come to nothing (no log is written), so the start is
+    # checked and tried again, up to 3 times.
+    wake() {
+        local _
+        for _ in $(seq 30); do
+            adb shell dumpsys power | grep -q 'mWakefulness=Awake' && return 0
+            adb shell am broadcast -a com.oculus.vrpowermanager.prox_close >/dev/null
+            adb shell input keyevent KEYCODE_WAKEUP; sleep 1
+        done
+        return 1
+    }
+    started=
+    for try in 1 2 3; do
+        wake || die "the headset would not wake (dumpsys power: not Awake) - press its power button once, then retry"
+        adb shell am force-stop "$PKG" >/dev/null 2>&1 || true
+        adb logcat -c >/dev/null 2>&1 || true
+        adb shell am start -n "$PKG/$ACTIVITY" >/dev/null
+        for _ in $(seq 20); do
+            adb shell "test -s $HEADSET_DIR/$LOG" && { started=1; break; }
+            sleep 2
+        done
+        [ -n "$started" ] && break
+        if adb logcat -d 2>/dev/null | grep -q GuardianDialogActivity; then
+            echo "vt3-repro: a Guardian boundary prompt is up - it needs someone to confirm it in the headset" >&2
+        fi
+        echo "vt3-repro: launch $try came to nothing (no $LOG after 40 s), trying again" >&2
     done
-    [ -n "$awake" ] || die "the headset would not wake (dumpsys power: not Awake) - press its power button or put it on, then retry"
+    [ -n "$started" ] || die "the game did not start after 3 launches (Guardian prompt, or the headset asleep) - see adb logcat"
     echo "vt3-repro: $SCENE on the headset for ${SECS}s -> $OUT"
-    adb shell am start -n "$PKG/$ACTIVITY" >/dev/null
     sleep "$SECS"
     adb pull "$HEADSET_DIR/$LOG" "$OUT/vt3.log" >/dev/null 2>&1 || echo "vt3-repro: no $LOG - the launch may have failed (Guardian prompt?)"
-    for f in $(adb shell "ls $HEADSET_DIR/vt3_Lindbergh/ 2>/dev/null" | tr -d '\r' | grep '^game_.*\.ppm$' || true); do
+    for f in $(adb shell "ls $HEADSET_DIR/vt3_Lindbergh/ 2>/dev/null" | tr -d '\r' | grep -E '^(game|xrshot)_.*\.ppm$' || true); do
         adb pull "$HEADSET_DIR/vt3_Lindbergh/$f" "$OUT/" >/dev/null
     done
     ;;
