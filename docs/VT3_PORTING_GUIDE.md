@@ -183,7 +183,13 @@ lindberghrecomp runtime:
    - Gradle 8.9 needs JDK 21: `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home` (JDK 26 is too new).
    - GL thunks against gl4es (recipe in `docs/hotd4/QUEST.md`): `llvm-nm` the exports of `../deps/gl4es/lib/libGL.a`, then `gen_gl_thunks.py --exports ... > games/vt3/generated/recomp_gl_thunks_android.c`. Redo this after every re-lift.
    - `quest/build.sh vt3`, then `quest/install.sh vt3 <disk0>` (copies about 1.8 GB to `/sdcard/VirtuaTennis3`).
-   Launcher icons are hotd4 placeholders. The lever controls (thumbsticks) are untested.
+   Launcher icons are hotd4 placeholders.
+
+   **On the headset (2026-11-08):** boots, menus and attract at 60 fps; controls work (right trigger = confirm/topspin, A = lob, B = slice, stick = lever, stick click = start). **Open problems:**
+   - **Only text is visible; the 3D and textured scene is black.** A capture (`LINDBERGH_CAPTURE=<frame>` in `env.txt`) shows the whole match being drawn into the eyes with valid programs, so the loss is later, most likely the post-process composite (the stage that broke on macOS too; under `LINDBERGH_GL4ES` the attribute aliasing in `arbprog.c` takes a different branch). The capture's eye readback fails ("cannot be read through a framebuffer"), and `LINDBERGH_EYE_DUMP` writes nothing after boot; fixing that readback is the next step.
+   - **Match frame rate** was 3-6 fps from ~640 game-thread waits per frame on `glCallList` / client-attrib calls; now queued (0 waits). A match still ran at ~6 fps afterwards, game-thread bound (~150 ms), not yet profiled.
+   - Ruled out as the frame-rate cause: render-target enlargement (`LINDBERGH_XR_TARGET_K=1`), the compositor depth copy (`LINDBERGH_XR_DEPTH=0`), fragment shading (`LINDBERGH_FP_SOLID=1` made it slower).
+   - Testing: runtime options go in `/sdcard/VirtuaTennis3/env.txt`; `LINDBERGH_AUTOSTART` and `LINDBERGH_KEYS` drive the menus. The headset must be worn: it will not place the app on screen otherwise, even with the proximity sensor overridden. First launch into a match compiles ~7.5 s of shaders; later launches ~0.6 s from `/sdcard/VirtuaTennis3/shadercache`.
 4. **Vulkan renderer** — untested for VT3 (needs a shader pack via `quest/build_vulkan.py`).
 5. **Other games** (hotd4, lgj, gse) have not been rebuilt against the toolkit changes above. The lifter changes (16-bit push, x87 rounding) affect every game and should be regression-checked.
 6. `lindbergh_nvram.bin` is written beside the executable; the card-reader message is Japanese-only (cabinet language setting).
