@@ -32,6 +32,9 @@ GAME=
 if [ "$1" = --with-game ]; then
     GAME=$(find_game "$2")
     [ -n "$GAME" ] || { echo "--with-game needs the game's folder ($FOLDER_HINT, with $ELF in it)"; exit 1; }
+    if type check_game >/dev/null 2>&1 && ! check_game "$GAME" && [ "${LINDBERGH_ALLOW_DAMAGED_GAME:-}" != 1 ]; then
+        echo "build stopped: fix the game files above (or LINDBERGH_ALLOW_DAMAGED_GAME=1 to build anyway)" >&2; exit 1
+    fi
 fi
 STRIP=$NDK/toolchains/llvm/prebuilt/$HOST/bin/llvm-strip
 

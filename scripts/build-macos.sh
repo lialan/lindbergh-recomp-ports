@@ -35,6 +35,9 @@ say() { printf '==> %s\n' "$*"; }
 # ---- the game folder ----
 GAME="$(find_game "$2")"
 [ -n "$GAME" ] || die "no $ELF in $2 (expected $TITLE's folder, $FOLDER_HINT)"
+if type check_game >/dev/null 2>&1 && ! check_game "$GAME" && [ "${LINDBERGH_ALLOW_DAMAGED_GAME:-}" != 1 ]; then
+    die "build stopped: fix the game files above (or LINDBERGH_ALLOW_DAMAGED_GAME=1 to build anyway)"
+fi
 for f in $ELF ${SOLIBS:-}; do
     [ -f "$GAME/$f" ] || die "$GAME/$f is missing"
 done

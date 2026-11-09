@@ -19,6 +19,9 @@ adb shell appops set --uid "$PKG" MANAGE_EXTERNAL_STORAGE allow
 if [ -n "$2" ]; then
     GAME=$(find_game "$2")
     [ -n "$GAME" ] || { echo "$2 has no $ELF - give the game's folder ($FOLDER_HINT)"; exit 1; }
+    if type check_game >/dev/null 2>&1 && ! check_game "$GAME" && [ "${LINDBERGH_ALLOW_DAMAGED_GAME:-}" != 1 ]; then
+        echo "install stopped: fix the game files above (or LINDBERGH_ALLOW_DAMAGED_GAME=1 to copy it anyway)" >&2; exit 1
+    fi
     DEST=$HEADSET_DIR${HEADSET_SUB:+/$HEADSET_SUB}
     echo "copying the game to $DEST ($SIZE)"
     adb shell mkdir -p "$DEST"
