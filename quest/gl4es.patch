@@ -519,10 +519,10 @@ index b0f02993..2daf81c9 100644
          if((hardext.npot==1 || hardext.npot==2) && (!tex->actual.wrap_s || !tex->actual.wrap_t || !wrap_npot(tex->actual.wrap_s) || !wrap_npot(tex->actual.wrap_t))) {
 diff --git a/src/gl/multiview.c b/src/gl/multiview.c
 new file mode 100644
-index 00000000..f3ec40d3
+index 00000000..967e7fec
 --- /dev/null
 +++ b/src/gl/multiview.c
-@@ -0,0 +1,640 @@
+@@ -0,0 +1,798 @@
 +// multiview.c - both eyes of a VR headset in one pass (see multiview.h).
 +//
 +// Shaders: what gl4es makes of every shader is GLSL ES 1.00, and multiview
@@ -1163,6 +1163,164 @@ index 00000000..f3ec40d3
 +    gltexture_t* t = glstate->texture.bound[unit][ENABLED_TEX2D];
 +    if (t) t->lg_shadow = 1;
 +}
++
++// The middle texel of a cube map's +X face, read back (debugging: is it
++// black?). 1: read as bytes, 2: as floats, 0: no such texture, <0: -GL error.
++int gl4es_cube_probe(GLuint texture, float out[4])
++{
++    gltexture_t* t = gl4es_getTexture(GL_TEXTURE_CUBE_MAP, texture);
++    if(!t || !t->glname) return 0;
++    GLint read = 0;
++    mv.GetIntegerv(0x8CAA /*GL_READ_FRAMEBUFFER_BINDING*/, &read);
++    GLuint fb = 0;
++    mv.GenFramebuffers(1, &fb);
++    mv.BindFramebuffer(GL_READ_FRAMEBUFFER, fb);
++    while(mv.GetError() != GL_NO_ERROR) {}
++    mv.FramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 0x8515, t->glname, 0);
++    int cx = (t->width > 0 ? t->width : 2) / 2, cy = (t->height > 0 ? t->height : 2) / 2;
++    unsigned char b[4] = {0, 0, 0, 0};
++    mv.ReadPixels(cx, cy, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, b);
++    GLenum e = mv.GetError();
++    int ok;
++    if(!e) { for(int i = 0; i < 4; i++) out[i] = b[i] / 255.0f; ok = 1; }
++    else {
++        float f[4] = {0, 0, 0, 0};
++        while(mv.GetError() != GL_NO_ERROR) {}
++        mv.ReadPixels(cx, cy, 1, 1, GL_RGBA, GL_FLOAT, f);
++        GLenum e2 = mv.GetError();
++        if(!e2) { for(int i = 0; i < 4; i++) out[i] = f[i]; ok = 2; }
++        else ok = -(int)e2;
++    }
++    mv.BindFramebuffer(GL_READ_FRAMEBUFFER, read);
++    mv.DeleteFramebuffers(1, &fb);
++    return ok;
++}
++
++// A cube map's state, both as gl4es keeps it and as the driver has it: its
++// filters and mip settings, and each face's level sizes and formats - why
++// would sampling it give black (an incomplete cube)? Printed to stdout.
++void gl4es_cube_report(GLuint texture)
++{
++    gltexture_t* t = gl4es_getTexture(GL_TEXTURE_CUBE_MAP, texture);
++    if(!t || !t->glname) { printf("LIBGL: cube %u: none\n", texture); return; }
++    static void (*bind)(GLenum, GLuint), (*lvl)(GLenum, GLint, GLenum, GLint*), (*par)(GLenum, GLenum, GLint*);
++    if(!bind) {
++        *(void**)&bind = proc_address(gles, "glBindTexture");
++        *(void**)&lvl = proc_address(gles, "glGetTexLevelParameteriv");
++        *(void**)&par = proc_address(gles, "glGetTexParameteriv");
++    }
++    GLint was = 0;
++    mv.GetIntegerv(0x8514 /*TEXTURE_BINDING_CUBE_MAP*/, &was);
++    bind(GL_TEXTURE_CUBE_MAP, t->glname);
++    GLint minf = 0, magf = 0, maxl = 0, basel = 0;
++    par(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, &minf);
++    par(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, &magf);
++    par(GL_TEXTURE_CUBE_MAP, 0x813D /*MAX_LEVEL*/, &maxl);
++    par(GL_TEXTURE_CUBE_MAP, 0x813C /*BASE_LEVEL*/, &basel);
++    {   // each face's middle texel, read back (empty faces sample black)
++        GLint rd = 0; mv.GetIntegerv(0x8CAA, &rd);
++        GLuint fb = 0; mv.GenFramebuffers(1, &fb); mv.BindFramebuffer(GL_READ_FRAMEBUFFER, fb);
++        char line[512]; int n = snprintf(line, sizeof line, "LIBGL: cube %u face centres:", texture);
++        for(int f = 0; f < 6; f++) {
++            while(mv.GetError() != GL_NO_ERROR) {}
++            mv.FramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, 0x8515 + f, t->glname, 0);
++            int c = (t->width > 0 ? t->width : 2) / 2;
++            unsigned char b[4] = {0,0,0,0}; float fl[4] = {0,0,0,0};
++            mv.ReadPixels(c, c, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, b);
++            if(mv.GetError() == GL_NO_ERROR) n += snprintf(line + n, sizeof line - n, " [%d] %u,%u,%u", f, b[0], b[1], b[2]);
++            else { while(mv.GetError() != GL_NO_ERROR) {}
++                   mv.ReadPixels(c, c, 1, 1, GL_RGBA, GL_FLOAT, fl);
++                   if(mv.GetError() == GL_NO_ERROR) n += snprintf(line + n, sizeof line - n, " [%d] %.2f,%.2f,%.2f", f, fl[0], fl[1], fl[2]);
++                   else n += snprintf(line + n, sizeof line - n, " [%d] unreadable", f); }
++        }
++        printf("%s\n", line);
++        mv.BindFramebuffer(GL_READ_FRAMEBUFFER, rd); mv.DeleteFramebuffers(1, &fb);
++        while(mv.GetError() != GL_NO_ERROR) {}
++    }
++    printf("LIBGL: cube %u (driver %u): gl4es min %#x max_level %d mipmap_need %d auto %d native_levels %d format %#x type %#x internal %#x | driver min %#x mag %#x base %d max %d\n",
++           texture, t->glname, t->sampler.min_filter, t->max_level, t->mipmap_need, t->mipmap_auto, t->native_levels,
++           t->format, t->type, t->internalformat, minf, magf, basel, maxl);
++    for(int f = 0; f < 6; f++) {
++        char line[512]; int n = 0;
++        n += snprintf(line + n, sizeof line - n, "LIBGL:   face %d:", f);
++        for(int l = 0; l < 9 && n < 480; l++) {
++            GLint w = 0, fmt = 0;
++            lvl(0x8515 + f, l, GL_TEXTURE_WIDTH, &w);
++            lvl(0x8515 + f, l, GL_TEXTURE_INTERNAL_FORMAT, &fmt);
++            if(!w) break;
++            n += snprintf(line + n, sizeof line - n, " L%d %dpx %#x", l, w, fmt);
++        }
++        printf("%s\n", line);
++    }
++    while(mv.GetError() != GL_NO_ERROR) {}
++    bind(GL_TEXTURE_CUBE_MAP, (GLuint)was);
++}
++
++// Cube maps a shader reads without a glEnable(GL_TEXTURE_CUBE_MAP) on the
++// unit (ARB programs and GLSL never need one): realize_textures only applies
++// the enabled target's filters, so the driver kept the default mipmapped min
++// filter on a cube with one level - incomplete, sampled black (Virtua Tennis
++// 3's ambient light, its players dark). Their sampler state, applied.
++GLenum get_texture_min_filter(gltexture_t* texture, glsampler_t* sampler);
++GLenum get_texture_wrap_s(gltexture_t* texture, glsampler_t* sampler);
++GLenum get_texture_wrap_t(gltexture_t* texture, glsampler_t* sampler);
++void gl4es_realize_cubes(unsigned units)
++{
++    static void (*active)(GLenum), (*par)(GLenum, GLenum, GLint), (*bind)(GLenum, GLuint);
++    if(!active) {
++        *(void**)&active = proc_address(gles, "glActiveTexture");
++        *(void**)&par = proc_address(gles, "glTexParameteri");
++        *(void**)&bind = proc_address(gles, "glBindTexture");
++    }
++    for(int u = 0; u < MAX_TEX && u < 16; u++) {
++        if(!(units >> u & 1)) continue;
++        gltexture_t* t = glstate->texture.bound[u][ENABLED_CUBE_MAP];
++        if(!t || !t->glname) continue;
++        // gl4es binds a cube map when the game does and counts on it
++        // staying; the driver's binding was found at 0 by draw time (the
++        // close-ups' ambient light read an unbound unit: black). Bound again.
++        if(glstate->gleshard->active != u) { glstate->gleshard->active = u; active(GL_TEXTURE0 + u); }
++        bind(GL_TEXTURE_CUBE_MAP, t->glname);
++        glsampler_t* s = glstate->samplers.sampler[u] ? glstate->samplers.sampler[u] : &t->sampler;
++        GLenum mn = get_texture_min_filter(t, s), mg = s->mag_filter;
++        // gl4es' own record of the driver's filters (actual) was set by a
++        // call that went to the unit's 2D binding: kept apart for the cube
++        if(t->lg_cube_min == (int)mn && t->lg_cube_mag == (int)mg) continue;
++        if(glstate->gleshard->active != u) { glstate->gleshard->active = u; active(GL_TEXTURE0 + u); }
++        if(!t->lg_cube_min) {
++            // the levels it has, and no more: a desktop driver made the
++            // rest itself (GL_GENERATE_MIPMAP); a GLES one counts a mipmapped
++            // filter over missing levels as incomplete
++            static void (*lvl)(GLenum, GLint, GLenum, GLint*);
++            if(!lvl) *(void**)&lvl = proc_address(gles, "glGetTexLevelParameteriv");
++            int top = 0;
++            for(int l = 1; l < 14; l++) { GLint w = 0; lvl(0x8515, l, GL_TEXTURE_WIDTH, &w); if(!w) break; top = l; }
++            par(GL_TEXTURE_CUBE_MAP, 0x813D /*MAX_LEVEL*/, top);
++            if(mv_check) printf("LIBGL: cube %u on unit %d: min %#x mag %#x, levels 0..%d\n", t->texture, u, mn, mg, top);
++        }
++        par(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, mn);
++        par(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, mg);
++        par(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, get_texture_wrap_s(t, s));
++        par(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, get_texture_wrap_t(t, s));
++        t->lg_cube_min = mn; t->lg_cube_mag = mg;
++    }
++}
++
++// What the driver has bound as a cube map on a unit, against what gl4es
++// thinks (debugging): fills raw and ours, returns 1 when they differ.
++int gl4es_cube_binding(int unit, unsigned* raw, unsigned* ours)
++{
++    static void (*active)(GLenum);
++    if(!active) *(void**)&active = proc_address(gles, "glActiveTexture");
++    GLint was = GL_TEXTURE0, b = 0;
++    mv.GetIntegerv(GL_ACTIVE_TEXTURE, &was);
++    active(GL_TEXTURE0 + unit);
++    mv.GetIntegerv(0x8514 /*TEXTURE_BINDING_CUBE_MAP*/, &b);
++    active(was);
++    gltexture_t* t = glstate->texture.bound[unit][ENABLED_CUBE_MAP];
++    *raw = (unsigned)b; *ours = t ? t->glname : 0;
++    return *raw != *ours;
++}
 diff --git a/src/gl/multiview.h b/src/gl/multiview.h
 new file mode 100644
 index 00000000..68a8e70f
@@ -1696,10 +1854,10 @@ index c0d479a8..07c7905e 100644
          if(bound->base_level == level && !(bound->max_level==level && level==0)) {
              int leveln = level, nw = width, nh = height, xx=xoffset, yy=yoffset;
 diff --git a/src/gl/texture.h b/src/gl/texture.h
-index 33e140a3..c08ecd7b 100644
+index 33e140a3..2c6b15f0 100644
 --- a/src/gl/texture.h
 +++ b/src/gl/texture.h
-@@ -156,6 +156,12 @@ typedef struct {
+@@ -156,6 +156,13 @@ typedef struct {
      glsampler_t sampler;    // internal sampler if not superseded by glBindSampler
      glsampler_t actual;     // actual sampler
      float fbtex_ratio; // Lower rendering resolution
@@ -1709,11 +1867,12 @@ index 33e140a3..c08ecd7b 100644
 +    int mv_layered;     // multiview.c: a 2D texture drawn into, sampled by layer too
 +    int native_levels;  // DXT given to the driver as it is: mip levels so far
 +    int lg_shadow;      // multiview.c: a shadow map, its compare done in the shader
++    int lg_cube_min, lg_cube_mag;   // multiview.c: the filters a cube map was given (gl4es_realize_cubes)
  } gltexture_t;
  
  KHASH_MAP_DECLARE_INT(tex, gltexture_t *);
 diff --git a/src/gl/texture_compressed.c b/src/gl/texture_compressed.c
-index 25d2d742..f3e806c5 100644
+index 25d2d742..9368a06e 100644
 --- a/src/gl/texture_compressed.c
 +++ b/src/gl/texture_compressed.c
 @@ -1,3 +1,6 @@
@@ -1829,7 +1988,7 @@ index 25d2d742..f3e806c5 100644
  void APIENTRY_GL4ES gl4es_glCompressedTexImage2D(GLenum target, GLint level, GLenum internalformat,
                              GLsizei width, GLsizei height, GLint border,
                              GLsizei imageSize, const GLvoid *data) 
-@@ -204,6 +253,43 @@ void APIENTRY_GL4ES gl4es_glCompressedTexImage2D(GLenum target, GLint level, GLe
+@@ -204,6 +253,47 @@ void APIENTRY_GL4ES gl4es_glCompressedTexImage2D(GLenum target, GLint level, GLe
      
      GLenum format = GL_RGBA;
      GLenum type = GL_UNSIGNED_BYTE;
@@ -1862,9 +2021,13 @@ index 25d2d742..f3e806c5 100644
 +        gles_glCompressedTexImage2D(rtarget, level, internalformat, width, height, border, imageSize, datab);
 +        errorGL();
 +        // the levels given so far are the whole chain: complete with them
++        // (a parameter belongs to the texture: a cube map's, not its face's -
++        // set on the face it failed, the cube kept 1000 levels and, incomplete,
++        // sampled black: Virtua Tennis 3's players lost their ambient light)
 +        if (level+1 > bound->native_levels) {
 +            bound->native_levels = level+1;
-+            gles_glTexParameteri(rtarget, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, level);
++            GLenum ptarget = (rtarget >= 0x8515 && rtarget <= 0x851A) ? GL_TEXTURE_CUBE_MAP : rtarget;
++            gles_glTexParameteri(ptarget, 0x813D /*GL_TEXTURE_MAX_LEVEL*/, level);
 +            if (level) bound->mipmap_auto = 1;
 +        }
 +        glstate->vao->unpack = unpack;
@@ -1873,7 +2036,7 @@ index 25d2d742..f3e806c5 100644
          
      if (isDXTc(internalformat)) {
          if(level && bound->mipmap_auto==1)
-@@ -229,6 +315,7 @@ void APIENTRY_GL4ES gl4es_glCompressedTexImage2D(GLenum target, GLint level, GLe
+@@ -229,6 +319,7 @@ void APIENTRY_GL4ES gl4es_glCompressedTexImage2D(GLenum target, GLint level, GLe
              }
          }
          int srgb = isDXTcSRGB(internalformat);
@@ -1881,7 +2044,7 @@ index 25d2d742..f3e806c5 100644
          int simpleAlpha = 0;
          int complexAlpha = 0;
          int transparent0 = (internalformat==GL_COMPRESSED_RGBA_S3TC_DXT1_EXT || internalformat==GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT)?1:0;
-@@ -248,6 +335,7 @@ void APIENTRY_GL4ES gl4es_glCompressedTexImage2D(GLenum target, GLint level, GLe
+@@ -248,6 +339,7 @@ void APIENTRY_GL4ES gl4es_glCompressedTexImage2D(GLenum target, GLint level, GLe
              } else {
                  pixels = uncompressDXTc(width, height, internalformat, imageSize, transparent0, &simpleAlpha, &complexAlpha, datab);
              }
@@ -1889,7 +2052,7 @@ index 25d2d742..f3e806c5 100644
              if(srgb)
                  pixel_srgb_inplace(pixels, width, height);
              // automaticaly reduce the pixel size
-@@ -289,7 +377,16 @@ void APIENTRY_GL4ES gl4es_glCompressedTexImage2D(GLenum target, GLint level, GLe
+@@ -289,7 +381,16 @@ void APIENTRY_GL4ES gl4es_glCompressedTexImage2D(GLenum target, GLint level, GLe
          if(level && bound && bound->valid)
              new_intformat = (bound->format==GL_RGB)?GL_COMPRESSED_RGB:GL_COMPRESSED_RGBA;
          DBG(printf(" => internalformat=%s (Alpha=%d/%d), %dx%d %s/%s\n\n", PrintEnum(new_intformat), simpleAlpha, complexAlpha, width, height, PrintEnum(format), PrintEnum(type));)
@@ -1906,7 +2069,7 @@ index 25d2d742..f3e806c5 100644
          // re-update bounded texture info, but not format and type
          bound->alpha = (simpleAlpha||complexAlpha)?1:0;
          bound->compressed = 1;
-@@ -365,6 +462,12 @@ void APIENTRY_GL4ES gl4es_glCompressedTexSubImage2D(GLenum target, GLint level,
+@@ -365,6 +466,12 @@ void APIENTRY_GL4ES gl4es_glCompressedTexSubImage2D(GLenum target, GLint level,
      int simpleAlpha = 0;
      int complexAlpha = 0;
      int transparent0 = (format==GL_COMPRESSED_RGBA_S3TC_DXT1_EXT || format==GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT)?1:0;
