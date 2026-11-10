@@ -396,6 +396,10 @@ The panel is now 20 rows (`XM_ROWS`, `XM_H` 824).
 - Also under immersive: scene culling off (`_sCamera::isVisible` -> true; costs fps, ~37 seen), a wider eye depth range in `stereo.c`, and the stereoscopic-screen experiment (`LINDBERGH_STEREO_DEPTH`, `u_eyex`).
 - Diagnostics: `LINDBERGH_MVP_DUMP=<frame>` logs every draw's `program.local[0..3]` (`[mvp]`) and every camera set (`[cam]`) around that frame; solve `M = inv(P*V) * MVP` offline to see which camera a draw used.
 
+- **Closer camera:** the world-mode viewpoint is moved in along the broadcast camera's view by `LINDBERGH_VT3_DOLLY` game units (default 200 of its ~345 from the court; a unit is ~0.1 m), `stereo.c` `effective_projection` (`out * T(0,0,+d)`). The narrow lens (~20 deg down) made the stadium a small model far off.
+- **Shadows in world mode:** ground shadows are drawn with a flattened model matrix, which the lens read takes apart wrong (their depth off, so the eyes and the dolly put them metres from the feet). A draw made through the broadcast projection exactly - row 3 + A x row 4 of its matrix = (0 0 0 B) - now gets that projection, shadows included (`arbprog.c`; `LINDBERGH_VT3_GAME_CAM=3` turns it off).
+- **Replays switch:** headset menu **Replays On/Off** (`vr.cfg` `replays on|off`, `LINDBERGH_REPLAYS=0` for a run). Off, a wrap of `replay::isReplay_point` answers no; the match goes straight on (checked on the Quest, `forty` scene).
+
 ### 8.0.1 Open in immersive mode
 - Sky is black (not drawn or outside the depth range); scoreboards float in the scene at court level instead of a HUD panel; one black frame at a camera change; culling should be widened to the headset's view instead of off; stadium scale/distance not tuned; panel switch flat / world (Mario Galaxy recomp style) not built yet.
 
