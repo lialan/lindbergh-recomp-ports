@@ -128,7 +128,14 @@ quest)
     done
     [ -n "$started" ] || die "the game did not start after 3 launches (Guardian prompt, or the headset asleep) - see adb logcat"
     echo "vt3-repro: $SCENE on the headset for ${SECS}s -> $OUT"
-    sleep "$SECS"
+    # an unworn headset dozes off within a minute or two even told it is
+    # worn, and the session stops being shown (black frames): told again
+    # every 15 s while the run lasts
+    for _ in $(seq $(( (SECS + 14) / 15 ))); do
+        adb shell am broadcast -a com.oculus.vrpowermanager.prox_close >/dev/null 2>&1 || true
+        adb shell dumpsys power | grep -q 'mWakefulness=Awake' || adb shell input keyevent KEYCODE_WAKEUP >/dev/null 2>&1 || true
+        sleep 15
+    done
     adb pull "$HEADSET_DIR/$LOG" "$OUT/vt3.log" >/dev/null 2>&1 || echo "vt3-repro: no $LOG - the launch may have failed (Guardian prompt?)"
     for f in $(adb shell "ls $HEADSET_DIR/vt3_Lindbergh/ 2>/dev/null" | tr -d '\r' | grep -E '^(game|xrshot)_.*\.ppm$' || true); do
         adb pull "$HEADSET_DIR/vt3_Lindbergh/$f" "$OUT/" >/dev/null

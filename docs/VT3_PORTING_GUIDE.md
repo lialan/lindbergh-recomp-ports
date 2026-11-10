@@ -346,7 +346,7 @@ for f in 2100 2500 2900 3300; do K="$K$((f+45)):"$'\r'","; done
 ```
 **Unattended runs: use `LINDBERGH_GAME_SHOT`.** It reads the game's own picture on the GPU, so it works even when the session never gets past READY. Add `LINDBERGH_FORCE_REPLAY=1` to reach the replay camera in about a minute. The helper script used for this (scratch, not in the repo) pushes `env.txt`, does the proximity override and wake retries, launches, waits, pulls `vt3.log` and `game_*/xrshot_*` files, then force-stops, undoes the override and empties `env.txt`. One menu-to-replay run takes ~2.5 minutes.
 
-`scripts/vt3-repro.sh <scene> quest` does all of this. It also checks that the game really started (its log appears within 40 s) and tries the launch up to 3 times: a launch into a sleeping or just-woken headset sometimes comes to nothing. Nobody has to wear the headset. `XR_SHOT` frames do need the session shown; `GAME_SHOT` does not.
+`scripts/vt3-repro.sh <scene> quest` does all of this, and repeats the proximity override and wake every 15 s while the run lasts (an unworn headset dozes off within a minute or two). It also checks that the game really started (its log appears within 40 s) and tries the launch up to 3 times: a launch into a sleeping or just-woken headset sometimes comes to nothing. Nobody has to wear the headset. `XR_SHOT` frames do need the session shown; `GAME_SHOT` does not.
 
 Blockers seen: the **Guardian boundary dialog** (logcat `GuardianDialogActivity`) keeps the session at READY (states `1 2` in the log) until someone confirms the boundary; don't turn Guardian off from adb, ask the person. A launch sometimes fails silently: check that `vt3.log` is new before reading it.
 
@@ -382,7 +382,23 @@ The left controller's menu button (or the other hand's upper button held for a s
 
 The panel is now 20 rows (`XM_ROWS`, `XM_H` 824).
 
-## 8. Future: Immersive Mode (planned)
+## 8. Immersive Mode (world mode working, 2026-11-09)
+
+**Status:** `LINDBERGH_VT3_IMMERSIVE=1` (in `env.txt`) draws the match as a 3D stadium in front of the player at the broadcast camera's angle, pushed back in depth (HOTD4-style world mode). Confirmed in the headset. Default is still the flat screen.
+
+### 8.0 What the camera turned out to be
+- **Two cameras per frame**, read with a wrap of `_sRender::setProjectCameraMatrix` (`hle_sega.c`, immersive only), which leaves the current scene manager's projection at `+0x5c` (4x4, row-major) and view at `+0x2c` (3x4):
+  - **Broadcast camera** (set 3x a frame, first): lens 3.20261 / 5.67128, near 1, far 3000, pitched ~19 deg, ~345 units back; its view moves every frame. **Every match draw** goes through it with a rigid model matrix at real court positions (court at the origin, net posts x +-60, players z ~+-117) or a flattened one (ground shadows).
+  - **Pixel camera** (set ~9x a frame): lens 1.45455 / 2.57576, near 800, far 1050, no turn, 989.092 back - exactly 1360x768 at its screen plane. HUD, scoreboards, sprites.
+  - The "n 800 / f 1050 slab" seen earlier was the pixel camera, never the court.
+- **Root cause of the misplaced court:** the match shaders build the position by rows (`DP4 result.position.x, R0, c[0]` - `program.local[0..3]` are the matrix's **rows**), the HUD ones by columns (MUL/MAD). `arb_env_projection` read every draw by columns, so match draws were taken apart transposed. Fix: `position_by_rows()` marks such programs (`pos_kind` 3) and their locals are read transposed (only for `vr.camera_in_locals`, i.e. VT3).
+- Tried and **turned off** (`LINDBERGH_VT3_GAME_CAM`, test only): handing every draw the broadcast camera's exact projection (=2), and sending pixel-camera draws to the HUD (=1). Both blacked out the whole picture on the Quest (render targets and full-screen layers took them too).
+- Also under immersive: scene culling off (`_sCamera::isVisible` -> true; costs fps, ~37 seen), a wider eye depth range in `stereo.c`, and the stereoscopic-screen experiment (`LINDBERGH_STEREO_DEPTH`, `u_eyex`).
+- Diagnostics: `LINDBERGH_MVP_DUMP=<frame>` logs every draw's `program.local[0..3]` (`[mvp]`) and every camera set (`[cam]`) around that frame; solve `M = inv(P*V) * MVP` offline to see which camera a draw used.
+
+### 8.0.1 Open in immersive mode
+- Sky is black (not drawn or outside the depth range); scoreboards float in the scene at court level instead of a HUD panel; one black frame at a camera change; culling should be widened to the headset's view instead of off; stadium scale/distance not tuned; panel switch flat / world (Mario Galaxy recomp style) not built yet.
+
 
 Today the match is drawn as a flat picture on a screen in front of the player (the 2D "theatre" path in `stereo.c` / `host_xr.c` `xo_draw_screen`). The goal is to make it feel like being in the game.
 
