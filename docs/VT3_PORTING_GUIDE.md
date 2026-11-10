@@ -400,6 +400,14 @@ The panel is now 20 rows (`XM_ROWS`, `XM_H` 824).
 - **Shadows in world mode:** ground shadows are drawn with a flattened model matrix, which the lens read takes apart wrong (their depth off, so the eyes and the dolly put them metres from the feet). A draw made through the broadcast projection exactly - row 3 + A x row 4 of its matrix = (0 0 0 B) - now gets that projection, shadows included (`arbprog.c`; `LINDBERGH_VT3_GAME_CAM=3` turns it off).
 - **Replays switch:** headset menu **Replays On/Off** (`vr.cfg` `replays on|off`, `LINDBERGH_REPLAYS=0` for a run). Off, a wrap of `replay::isReplay_point` answers no; the match goes straight on (checked on the Quest, `forty` scene).
 
+- **Step back:** after the dolly the viewpoint steps back level with the ground (`LINDBERGH_VT3_BACK`, default 60 game units), along the camera's forward with the world's up taken out (up read from the game's view in the hook), so the player stands behind the court at the same height.
+- **Player shadows still off the feet in world mode (open).** Flat mode is fine. In world mode the players' silhouette shadows sit metres from the feet and slide with the head, **even with dolly and step back at 0**, so it is not the camera move. Ruled out, 2026-11-10:
+  - the shadow map (texture 40, light-matrix texcoords from object space; `LINDBERGH_SHADOW_LIT=1` leaves the silhouette);
+  - screen copies (none during play) and a deferred mask (no draws to fb 19/20 during play);
+  - the projection: every match draw passes the broadcast-camera test (`[envp]` lines with `LINDBERGH_MVP_DUMP`), read either way round; prop shadows (flattened model matrices) lie on y ~ 0.05 and are fine.
+  - Players are skinned on the CPU: program 228's constants are exactly P*V (no model matrix), vertices arrive in world space. The silhouettes most likely come the same way, flattened on the CPU, probably nudged toward the game camera (invisible from it, off from any other viewpoint). Next: read their vertex data (the client arrays at the draw) and see which plane they lie on.
+- Diagnostics added: `LINDBERGH_MVP_DUMP_ALL=1` (every local, the bone palette), `LINDBERGH_TXP_LOG=1` (each fragment program's projective reads and their textures).
+
 ### 8.0.1 Open in immersive mode
 - Sky is black (not drawn or outside the depth range); scoreboards float in the scene at court level instead of a HUD panel; one black frame at a camera change; culling should be widened to the headset's view instead of off; stadium scale/distance not tuned; panel switch flat / world (Mario Galaxy recomp style) not built yet.
 
